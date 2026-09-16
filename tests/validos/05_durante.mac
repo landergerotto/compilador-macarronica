@@ -1,0 +1,10 @@
+vazio principal() @
+[
+    inteira contador;
+    contador receba 0;
+    durante (contador < 3) edai
+    [
+        contador receba contador + 1;
+    ]
+    respost;
+]

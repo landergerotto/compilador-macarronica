@@ -1,0 +1,6 @@
+vazio principal() @
+[
+    inteira vet{3} valores;
+    valores{1.0} receba 1;
+    respost;
+]

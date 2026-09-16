@@ -1,0 +1,21 @@
+outrafuncao inteira primeiro(inteira n) @
+[
+    respost segundo(n);
+]
+
+outrafuncao inteira segundo(inteira n) @
+[
+    cond (n == 0) edai
+    [
+        respost 0;
+    ]
+    casocontrario edai
+    [
+        respost segundo(n - 1);
+    ]
+]
+
+inteira principal() @
+[
+    respost primeiro(2);
+]

@@ -1,0 +1,10 @@
+outrafuncao vazio tarefa() @
+[
+    respost;
+]
+
+vazio principal() @
+[
+    tarefa();
+    respost;
+]

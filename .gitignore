@@ -1,0 +1,8 @@
+/.github
+/build/
+*.o
+*.obj
+*.exe
+*.gcda
+*.gcno
+*.gcov

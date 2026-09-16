@@ -1,0 +1,6 @@
+vazio principal() @
+[
+    inteira vet{3} origem, destino;
+    destino receba origem;
+    respost;
+]

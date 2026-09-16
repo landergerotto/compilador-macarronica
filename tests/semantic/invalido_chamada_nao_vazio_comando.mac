@@ -1,0 +1,10 @@
+outrafuncao inteira calcula() @
+[
+    respost 1;
+]
+
+vazio principal() @
+[
+    calcula();
+    respost;
+]
