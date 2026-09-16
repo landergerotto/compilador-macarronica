@@ -1,0 +1,7 @@
+vazio principal() @
+[
+    cond 1 < 2 edai
+    [
+        respost;
+    ]
+]

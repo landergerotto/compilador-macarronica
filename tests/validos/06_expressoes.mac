@@ -1,0 +1,14 @@
+vazio principal() @
+[
+    inteira a, b;
+    flut x, y;
+    bool p, q, r;
+    a receba 2 + 3 * 4;
+    b receba a ^ 2 // 3;
+    x receba 9.0;
+    y receba raiz(x) / 3.0;
+    p receba a > b;
+    q receba VER XOR FAL;
+    r receba NÃO p OU q E VER;
+    respost;
+]
