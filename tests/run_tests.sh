@@ -151,6 +151,14 @@ for option in --dump-tokens --dump-ast --dump-symbols; do
     fi
 done
 
+run_compiler --dump-tokens "$sample" >"$temporary_dir/dump-tokens-path.txt" 2>"$temporary_dir/dump-tokens-path.err"
+if grep -q "algo.mac:" "$temporary_dir/dump-tokens-path.txt"; then
+    record_pass 'dump-tokens usa caminho real do arquivo'
+else
+    record_failure 'dump-tokens usa caminho real do arquivo' \
+        'linhas do dump nao contem o caminho do arquivo-fonte'
+fi
+
 run_compiler --help >"$temporary_dir/help.txt" 2>"$temporary_dir/help.err"
 status=$?
 if [ "$status" -eq 0 ] && grep -q '^Uso:' "$temporary_dir/help.txt"; then
