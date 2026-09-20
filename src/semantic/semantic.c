@@ -12,7 +12,6 @@ typedef struct {
     size_t current_scope_id;
     size_t current_function_id;
     size_t current_return_type_id;
-    size_t return_count;
     int inside_function;
     int allocation_failed;
 } SemanticAnalyzer;
@@ -805,7 +804,6 @@ static void analyze_block(SemanticAnalyzer *analyzer, AstNode *block)
 static void analyze_return(SemanticAnalyzer *analyzer, AstNode *node)
 {
     AstNode *value = node->as.return_stmt.value;
-    ++analyzer->return_count;
     if (!analyzer->inside_function) {
         semantic_error(analyzer, node->span, "E-SEM-022",
                        "respost somente pode aparecer em funcao");
@@ -955,12 +953,54 @@ static void analyze_record(SemanticAnalyzer *analyzer, AstNode *node)
     analyzer->current_scope_id = old_scope;
 }
 
+/*
+ * Determina se um bloco garante um `respost` em toda execucao possivel.
+ * `cond`/`casocontrario` so garante retorno se TODOS os ramos, incluindo um
+ * `casocontrario` final, garantirem; `enquanto`/`para` nunca garantem, pois a
+ * condicao pode ser falsa logo na primeira avaliacao.
+ */
+static int block_always_returns(const AstNode *block);
+
+static int statement_always_returns(const AstNode *node)
+{
+    size_t index;
+    if (node == NULL) return 0;
+    switch (node->kind) {
+    case AST_RETURN_STMT:
+        return 1;
+    case AST_BLOCK:
+        return block_always_returns(node);
+    case AST_IF_STMT:
+        if (node->as.if_stmt.else_body == NULL ||
+            !block_always_returns(node->as.if_stmt.else_body)) {
+            return 0;
+        }
+        for (index = 0U; index < node->as.if_stmt.branches.count; ++index) {
+            if (!block_always_returns(node->as.if_stmt.branches.items[index].body))
+                return 0;
+        }
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+static int block_always_returns(const AstNode *block)
+{
+    size_t index;
+    if (block == NULL || block->kind != AST_BLOCK) return 0;
+    for (index = 0U; index < block->as.block.statements.count; ++index) {
+        if (statement_always_returns(block->as.block.statements.items[index]))
+            return 1;
+    }
+    return 0;
+}
+
 static void analyze_function(SemanticAnalyzer *analyzer, AstNode *node)
 {
     size_t old_scope = analyzer->current_scope_id;
     size_t old_function = analyzer->current_function_id;
     size_t old_return_type = analyzer->current_return_type_id;
-    size_t old_return_count = analyzer->return_count;
     int old_inside_function = analyzer->inside_function;
     size_t function_scope;
     size_t index;
@@ -979,7 +1019,6 @@ static void analyze_function(SemanticAnalyzer *analyzer, AstNode *node)
     analyzer->current_function_id = node->semantic.symbol_id;
     analyzer->current_return_type_id =
         node->as.function_decl.return_type.resolved_type_id;
-    analyzer->return_count = 0U;
     analyzer->inside_function = 1;
 
     for (index = 0U; index < node->as.function_decl.parameters.count; ++index) {
@@ -998,23 +1037,21 @@ static void analyze_function(SemanticAnalyzer *analyzer, AstNode *node)
     if (valid_signature &&
         analyzer->current_return_type_id != TYPE_ID_VOID &&
         analyzer->current_return_type_id != TYPE_ID_ERROR &&
-        analyzer->return_count == 0U) {
+        !block_always_returns(node->as.function_decl.body)) {
         semantic_error(analyzer, node->as.function_decl.name_span,
                        "E-SEM-032",
-                       "funcao '%s' com retorno %s exige ao menos um respost",
+                       "funcao '%s' com retorno %s nao garante respost de valor "
+                       "em todos os caminhos de execucao",
                        node->as.function_decl.name,
                        type_name(&analyzer->result->types,
                                  analyzer->current_return_type_id));
         node->semantic.flags |= AST_SEMANTIC_ERROR;
     }
-    SEMANTIC_DEBUG("corpo analisado: %s, %zu retorno(s)\n",
-                   node->as.function_decl.name,
-                   analyzer->return_count);
+    SEMANTIC_DEBUG("corpo analisado: %s\n", node->as.function_decl.name);
 
     analyzer->current_scope_id = old_scope;
     analyzer->current_function_id = old_function;
     analyzer->current_return_type_id = old_return_type;
-    analyzer->return_count = old_return_count;
     analyzer->inside_function = old_inside_function;
 }
 
