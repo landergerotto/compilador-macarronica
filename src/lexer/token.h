@@ -87,6 +87,6 @@ void token_buffer_destroy(TokenBuffer *buffer);
 int token_buffer_push(TokenBuffer *buffer, Token token);
 const char *token_kind_name(TokenKind kind);
 int token_lexeme_equals(const Token *token, const char *text);
-void token_print(const Token *token, FILE *stream);
+void token_print(const Token *token, const char *path, FILE *stream);
 
 #endif
