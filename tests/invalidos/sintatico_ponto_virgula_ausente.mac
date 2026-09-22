@@ -1,0 +1,6 @@
+vazio principal() @
+[
+    inteira valor
+    valor receba 1;
+    respost;
+]

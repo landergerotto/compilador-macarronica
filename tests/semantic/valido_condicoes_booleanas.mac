@@ -1,0 +1,42 @@
+outrafuncao bool estaentre(inteira valor, inteira minimo, inteira maximo) @
+[
+    respost valor > minimo E valor < maximo;
+]
+
+vazio principal() @
+[
+    inteira a, b, c, d, i;
+    bool ativo;
+    bool vet{2} estados;
+    a receba 1;
+    b receba 2;
+    c receba 3;
+    d receba 4;
+    ativo receba VER;
+    estados{0} receba FAL;
+    estados{1} receba VER;
+
+    cond (a < b E c < d E ativo OU a == c OU b == d XOR FAL) edai
+    [
+        ativo receba NÃO FAL;
+    ]
+    casocontrario cond ((a < b OU c > d) E NÃO estados{0}) edai
+    [
+        ativo receba estaentre(c, a, d);
+    ]
+    casocontrario edai
+    [
+        ativo receba FAL;
+    ]
+
+    durante (ativo E estados{1} E estaentre(c, a, d)) edai
+    [
+        ativo receba FAL;
+    ]
+
+    repete (i receba 0, i < 2 E (ativo OU NÃO estados{i}), i receba i + 1) edai
+    [
+        estados{i} receba VER;
+    ]
+    respost;
+]

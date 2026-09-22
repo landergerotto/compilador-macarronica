@@ -1,0 +1,11 @@
+outrafuncao inteira soma(inteira a, inteira b) @
+[
+    respost a + b;
+]
+
+vazio principal() @
+[
+    inteira resultado;
+    resultado receba soma(1);
+    respost;
+]

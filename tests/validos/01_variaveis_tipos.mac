@@ -1,0 +1,18 @@
+outrafuncao duplocarpado identidadeDupla(duplocarpado valor) @
+[
+    respost valor;
+]
+
+vazio principal() @
+[
+    inteira contador;
+    flut medida;
+    duplocarpado precisa;
+    palavra nome;
+    bool ativo;
+    contador receba 12;
+    medida receba 3.5;
+    nome receba "macaronica";
+    ativo receba VER E NÃO FAL;
+    respost;
+]

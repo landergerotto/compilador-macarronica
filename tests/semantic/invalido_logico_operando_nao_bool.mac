@@ -1,0 +1,10 @@
+vazio principal() @
+[
+    inteira quantidade;
+    quantidade receba 2;
+    cond (VER E quantidade) edai
+    [
+        quantidade receba 0;
+    ]
+    respost;
+]
