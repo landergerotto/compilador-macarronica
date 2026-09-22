@@ -5,15 +5,21 @@
 
 #include <stddef.h>
 
+/* Usados quando ainda nao existe simbolo ou escopo ligado ao item. */
 #define SYMBOL_ID_NONE ((size_t)-1)
 #define SCOPE_ID_NONE ((size_t)-1)
 
+/*
+ * Separa nomes de tipos, funcoes e valores. Assim procurar uma variavel nao
+ * corre o risco de devolver um registro ou uma funcao com o mesmo nome.
+ */
 typedef enum {
     SYMBOL_NAMESPACE_TYPE,
     SYMBOL_NAMESPACE_FUNCTION,
     SYMBOL_NAMESPACE_VALUE
 } SymbolNamespace;
 
+/* O que aquele nome representa no programa. */
 typedef enum {
     SYMBOL_RECORD,
     SYMBOL_FUNCTION,
@@ -25,12 +31,14 @@ typedef enum {
     SYMBOL_FIELD
 } SymbolCategory;
 
+/* Escopos que existem hoje. cond, repete e durante nao criam um novo. */
 typedef enum {
     SCOPE_GLOBAL,
     SCOPE_FUNCTION,
     SCOPE_RECORD
 } ScopeKind;
 
+/* Cada escopo sabe quem e seu pai e qual simbolo criou ele. */
 typedef struct {
     size_t id;
     size_t parent_id;
@@ -39,6 +47,10 @@ typedef struct {
     size_t owner_symbol_id;
 } Scope;
 
+/*
+ * Tudo que precisamos lembrar sobre um nome declarado. Os ultimos campos
+ * guardam detalhes extras de funcoes e vetores.
+ */
 typedef struct {
     size_t id;
     char *name;
@@ -54,6 +66,7 @@ typedef struct {
     int is_principal;
 } Symbol;
 
+/* Lista de simbolos junto com a arvore de escopos. */
 typedef struct {
     Symbol *items;
     size_t count;
@@ -63,14 +76,27 @@ typedef struct {
     size_t scope_capacity;
 } SymbolTable;
 
+/* Comeca a tabela e ja cria o escopo global. */
 int symbol_table_init(SymbolTable *table);
+
+/* Libera simbolos, escopos e nomes guardados pela tabela. */
 void symbol_table_destroy(SymbolTable *table);
+
+/*
+ * Cria um escopo novo. parent_id diz para onde a busca sobe quando um nome nao
+ * foi encontrado aqui.
+ */
 int symbol_table_add_scope(SymbolTable *table,
                            size_t parent_id,
                            ScopeKind kind,
                            const char *name,
                            size_t owner_symbol_id,
                            size_t *out_scope_id);
+
+/*
+ * Guarda uma declaracao na tabela. A checagem de nome repetido acontece antes,
+ * na analise semantica.
+ */
 int symbol_table_declare(SymbolTable *table,
                          const char *name,
                          SymbolNamespace name_space,
@@ -79,25 +105,40 @@ int symbol_table_declare(SymbolTable *table,
                          size_t scope_id,
                          SourceSpan declaration_span,
                          size_t *out_symbol_id);
+
+/* Guarda os tipos dos parametros de uma funcao. */
 int symbol_set_parameters(SymbolTable *table,
                           size_t symbol_id,
                           const size_t *parameter_type_ids,
                           size_t parameter_count);
+
+/* Guarda o tipo do elemento e o tamanho de um vetor. */
 void symbol_set_vector(SymbolTable *table,
                        size_t symbol_id,
                        size_t element_type_id,
                        long long array_size);
+
+/*
+ * Busca direta pelo ID. O ponteiro devolvido pertence a tabela e pode mudar
+ * depois que novos simbolos forem adicionados.
+ */
 Symbol *symbol_table_get_mut(SymbolTable *table, size_t symbol_id);
 const Symbol *symbol_table_get(const SymbolTable *table, size_t symbol_id);
 const Scope *symbol_table_get_scope(const SymbolTable *table, size_t scope_id);
+
+/* Procura so naquele escopo. Usado para detectar nome repetido. */
 size_t symbol_table_lookup_current(const SymbolTable *table,
                                    size_t scope_id,
                                    SymbolNamespace name_space,
                                    const char *name);
+
+/* Procura aqui e depois vai subindo pelos pais ate chegar no global. */
 size_t symbol_table_lookup(const SymbolTable *table,
                            size_t scope_id,
                            SymbolNamespace name_space,
                            const char *name);
+
+/* Traduz os enums pra nomes usados nos dumps e erros. */
 const char *symbol_category_name(SymbolCategory category);
 const char *symbol_namespace_name(SymbolNamespace name_space);
 const char *scope_kind_name(ScopeKind kind);

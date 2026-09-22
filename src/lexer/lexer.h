@@ -1,6 +1,11 @@
 #ifndef MACARONICA_LEXER_LEXER_H
 #define MACARONICA_LEXER_LEXER_H
 
+/*
+ * O lexer pega o texto puro e separa em tokens. Aqui ainda nao importa se a
+ * ordem deles faz sentido ou se os tipos combinam.
+ */
+
 #include "../common/diagnostic.h"
 #include "../common/status.h"
 #include "token.h"
@@ -10,9 +15,11 @@
 #endif
 
 /*
- * Adiciona todos os tokens, inclusive INVALIDO e o EOF final, a out_tokens.
- * SourceFile deve sobreviver aos tokens, pois os lexemas sao fatias da fonte.
- * Distingue sucesso, rejeicao da fonte e falha interna ou de alocacao.
+ * Le a fonte inteira e coloca os tokens em out_tokens. Mesmo quando encontra
+ * algo errado, guarda TOKEN_INVALID, e no fim sempre coloca TOKEN_EOF.
+ *
+ * A fonte precisa continuar viva porque os tokens apontam direto pra ela.
+ * Os erros encontrados vao para diagnostics.
  */
 FrontendStatus lexer_scan_all(const SourceFile *source,
                               DiagnosticBag *diagnostics,

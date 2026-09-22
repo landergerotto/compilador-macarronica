@@ -6,6 +6,10 @@
 #include <stddef.h>
 #include <stdio.h>
 
+/*
+ * Todos os tipos de pedacos que o lexer consegue reconhecer: identificadores,
+ * literais, palavras reservadas, operadores e pontuacao.
+ */
 typedef enum {
     TOKEN_INVALID,
     TOKEN_EOF,
@@ -62,12 +66,17 @@ typedef enum {
     TOKEN_RIGHT_BRACE
 } TokenKind;
 
+/* Guarda o valor do literal depois da conversao. O kind diz qual campo usar. */
 typedef union {
     long long inteira;
     double real;
     int booleano;
 } TokenLiteral;
 
+/*
+ * Um token guarda seu tipo, onde apareceu e o trecho original do texto.
+ * start aponta pra dentro do SourceFile, entao o token nao pode viver sozinho.
+ */
 typedef struct {
     TokenKind kind;
     SourceSpan span;
@@ -76,17 +85,29 @@ typedef struct {
     TokenLiteral literal;
 } Token;
 
+/* Lista de tokens. Ela guarda os tokens, mas o texto ainda pertence a fonte. */
 typedef struct {
     Token *items;
     size_t count;
     size_t capacity;
 } TokenBuffer;
 
+/* Comeca uma lista de tokens vazia. */
 void token_buffer_init(TokenBuffer *buffer);
+
+/* Libera a lista, mas nao o texto da fonte. */
 void token_buffer_destroy(TokenBuffer *buffer);
+
+/* Coloca mais um token na lista. Retorna 0 se nao conseguiu aumentar o vetor. */
 int token_buffer_push(TokenBuffer *buffer, Token token);
+
+/* Traduz o enum pra um nome que da pra mostrar no dump. */
 const char *token_kind_name(TokenKind kind);
+
+/* Compara o texto original do token com uma string comum de C. */
 int token_lexeme_equals(const Token *token, const char *text);
+
+/* Mostra o token no formato usado por --dump-tokens. */
 void token_print(const Token *token, const char *path, FILE *stream);
 
 #endif

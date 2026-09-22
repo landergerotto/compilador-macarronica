@@ -1,13 +1,23 @@
 #ifndef MACARONICA_PARSER_AST_H
 #define MACARONICA_PARSER_AST_H
 
+/*
+ * A AST e a forma organizada do programa. Em vez de uma lista de tokens, ela
+ * mostra o que e declaracao, comando, operacao e filho de quem.
+ */
+
 #include "../common/source.h"
 
 #include <stddef.h>
 #include <stdio.h>
 
+/* Usado enquanto a semantica ainda nao ligou o no a nada. */
 #define AST_ID_NONE ((size_t)-1)
 
+/*
+ * Tipos de no que podem aparecer na arvore. Pontuacao como `;` nao precisa
+ * virar no porque ela so serviu para o parser entender a estrutura.
+ */
 typedef enum {
     AST_PROGRAM,
     AST_FUNCTION_DECL,
@@ -29,6 +39,7 @@ typedef enum {
     AST_IDENTIFIER_EXPR
 } AstKind;
 
+/* Qual operacao um no de expressao representa. */
 typedef enum {
     AST_OP_NONE,
     AST_OP_ADD,
@@ -50,6 +61,7 @@ typedef enum {
     AST_OP_UNARY_MINUS
 } AstOperator;
 
+/* Diz qual campo do valor literal esta valendo. */
 typedef enum {
     AST_LITERAL_INTEGER,
     AST_LITERAL_REAL,
@@ -82,12 +94,14 @@ typedef struct {
 
 typedef struct AstNode AstNode;
 
+/* Lista usada quando um no pode ter varios filhos. */
 typedef struct {
     AstNode **items;
     size_t count;
     size_t capacity;
 } AstNodeList;
 
+/* Junta a condicao com o bloco daquele ramo. */
 typedef struct {
     AstNode *condition;
     AstNode *body;
@@ -100,13 +114,22 @@ typedef struct {
     size_t capacity;
 } AstIfBranchList;
 
-/* Campos opacos ao parser, pertencentes às fases posteriores. */
+/*
+ * O parser deixa esses campos vazios. Depois a semantica coloca aqui qual
+ * simbolo e qual tipo o no representa, alem das flags de uso.
+ */
 typedef struct {
     size_t symbol_id;
     size_t type_id;
     unsigned int flags;
 } AstSemanticInfo;
 
+/*
+ * Todos os nos usam essa mesma struct. O kind diz qual parte da union `as`
+ * pode ser acessada. Por exemplo, AST_BINARY_EXPR usa as.binary_expr.
+ *
+ * Cada no e dono dos seus filhos. Por isso liberar a raiz libera a arvore toda.
+ */
 struct AstNode {
     AstKind kind;
     SourceSpan span;
@@ -201,7 +224,13 @@ struct AstNode {
     } as;
 };
 
+/* Cria um no novo e deixa a parte semantica como ainda nao resolvida. */
 AstNode *ast_node_create(AstKind kind, SourceSpan span, size_t node_id);
+
+/*
+ * Colocam itens nas listas dinamicas da AST. Se retornar 1, a lista passa a ser
+ * dona do item. Se retornar 0, quem chamou ainda precisa liberar o item.
+ */
 int ast_node_list_append(AstNodeList *list, AstNode *node);
 int ast_declared_name_list_append(AstDeclaredNameList *list,
                                   char *owned_name,
@@ -210,10 +239,18 @@ int ast_if_branch_list_append(AstIfBranchList *list,
                               AstNode *condition,
                               AstNode *body,
                               SourceSpan span);
+
+/* Limpa uma referencia de tipo e o nome guardado nela. */
 void ast_type_ref_destroy(AstTypeRef *type);
+
+/* Libera um no e vai descendo nos filhos ate limpar a arvore toda. */
 void ast_node_destroy(AstNode *node);
+
+/* Nomes usados no dump e nas mensagens de erro. */
 const char *ast_kind_name(AstKind kind);
 const char *ast_operator_name(AstOperator operator_kind);
+
+/* Mostra a arvore no formato do --dump-ast. */
 void ast_dump(const AstNode *node, FILE *stream);
 
 #endif
