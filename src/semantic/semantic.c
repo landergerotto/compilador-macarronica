@@ -954,10 +954,8 @@ static void analyze_record(SemanticAnalyzer *analyzer, AstNode *node)
 }
 
 /*
- * Determina se um bloco garante um `respost` em toda execucao possivel.
- * `cond`/`casocontrario` so garante retorno se TODOS os ramos, incluindo um
- * `casocontrario` final, garantirem; `enquanto`/`para` nunca garantem, pois a
- * condicao pode ser falsa logo na primeira avaliacao.
+ * `durante` e `repete` nunca contam como retorno garantido: a condicao pode ser
+ * falsa na primeira avaliacao e o corpo executar zero vezes.
  */
 static int block_always_returns(const AstNode *block);
 
