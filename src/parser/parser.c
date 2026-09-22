@@ -417,21 +417,35 @@ static AstNode *parse_power(Parser *parser)
 static AstNode *parse_multiplicative(Parser *parser)
 {
     AstNode *left = parse_power(parser);
+    size_t links = 0U;
     while (left != NULL && (check(parser, TOKEN_STAR) || check(parser, TOKEN_SLASH) ||
                             check(parser, TOKEN_INTEGER_DIVIDE))) {
-        const Token *op = advance(parser);
+        const Token *op;
+        if (!enter_expression_depth(parser, current_token(parser))) {
+            ast_node_destroy(left); left = NULL; break;
+        }
+        ++links;
+        op = advance(parser);
         left = make_binary(parser, left, op, parse_power(parser));
     }
+    while (links != 0U) { leave_expression_depth(parser); --links; }
     return left;
 }
 
 static AstNode *parse_additive(Parser *parser)
 {
     AstNode *left = parse_multiplicative(parser);
+    size_t links = 0U;
     while (left != NULL && (check(parser, TOKEN_PLUS) || check(parser, TOKEN_MINUS))) {
-        const Token *op = advance(parser);
+        const Token *op;
+        if (!enter_expression_depth(parser, current_token(parser))) {
+            ast_node_destroy(left); left = NULL; break;
+        }
+        ++links;
+        op = advance(parser);
         left = make_binary(parser, left, op, parse_multiplicative(parser));
     }
+    while (links != 0U) { leave_expression_depth(parser); --links; }
     return left;
 }
 
@@ -483,10 +497,17 @@ static AstNode *parse_not(Parser *parser)
 static AstNode *parse_left_logical(Parser *parser, AstNode *(*lower)(Parser *), TokenKind kind)
 {
     AstNode *left = lower(parser);
+    size_t links = 0U;
     while (left != NULL && check(parser, kind)) {
-        const Token *op = advance(parser);
+        const Token *op;
+        if (!enter_expression_depth(parser, current_token(parser))) {
+            ast_node_destroy(left); left = NULL; break;
+        }
+        ++links;
+        op = advance(parser);
         left = make_binary(parser, left, op, lower(parser));
     }
+    while (links != 0U) { leave_expression_depth(parser); --links; }
     return left;
 }
 
