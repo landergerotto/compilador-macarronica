@@ -151,6 +151,25 @@ else
         "esperava codigo 1 e E-SIN-009, recebeu $status"
 fi
 
+chain_source="$temporary_dir/cadeia_operadores.mac"
+{
+    printf 'vazio principal() @\n[\n    inteira x;\n    x receba 1'
+    link=0
+    while [ "$link" -le 512 ]; do
+        printf '+1'
+        link=$((link + 1))
+    done
+    printf ';\n    respost;\n]\n'
+} > "$chain_source"
+run_compiler "$chain_source" >"$temporary_dir/chain.txt" 2>"$temporary_dir/chain.err"
+status=$?
+if [ "$status" -eq 1 ] && grep -q ': sintatico E-SIN-009:' "$temporary_dir/chain.err"; then
+    record_pass 'parser limita cadeia de operadores'
+else
+    record_failure 'parser limita cadeia de operadores' \
+        "esperava codigo 1 e E-SIN-009, recebeu $status"
+fi
+
 sample="$project_root/examples/algo.mac"
 for option in --dump-tokens --dump-ast --dump-symbols; do
     run_compiler "$option" "$sample" >"$temporary_dir/dump-1.txt" 2>"$temporary_dir/dump-1.err"
