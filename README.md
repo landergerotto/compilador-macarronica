@@ -63,3 +63,10 @@ develop -> branch-de-trabalho -> develop -> main
 ```
 
 **Nunca desenvolver ou commitar diretamente na `main`.**
+
+## Documentação
+
+| Documento | Conteúdo |
+|---|---|
+| [`docs/guia-defesa-autoria.md`](docs/guia-defesa-autoria.md) | Guia para compreender e apresentar o front-end. |
+| [`docs/diagnosticos.md`](docs/diagnosticos.md) | Catálogo dos códigos de erro léxico, sintático e semântico. |

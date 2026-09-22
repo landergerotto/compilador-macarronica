@@ -1,0 +1,7 @@
+/.github
+*.o
+*.obj
+*.exe
+*.gcda
+*.gcno
+*.gcov
