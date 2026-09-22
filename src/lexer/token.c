@@ -77,7 +77,7 @@ int token_lexeme_equals(const Token *token, const char *text)
     return token->length == length && memcmp(token->start, text, length) == 0;
 }
 
-void token_print(const Token *token, FILE *stream)
+void token_print(const Token *token, const char *path, FILE *stream)
 {
     if (token == NULL) {
         return;
@@ -86,7 +86,7 @@ void token_print(const Token *token, FILE *stream)
         stream = stdout;
     }
     (void)fprintf(stream, "%s:%zu:%zu %-18s `",
-                  "token",
+                  path != NULL ? path : "<fonte>",
                   token->span.start.line,
                   token->span.start.column,
                   token_kind_name(token->kind));

@@ -16,13 +16,13 @@
 #define MACARONICA_COMPILER_DEBUG 1
 #endif
 
-static void dump_tokens(const TokenBuffer *tokens)
+static void dump_tokens(const TokenBuffer *tokens, const char *path)
 {
     size_t index;
 
     (void)fputs("tokens:\n", stdout);
     for (index = 0U; index < tokens->count; ++index) {
-        token_print(&tokens->items[index], stdout);
+        token_print(&tokens->items[index], path, stdout);
     }
 }
 
@@ -72,7 +72,7 @@ CompilerExitCode compiler_compile_file(const char *path,
         goto diagnostics_and_cleanup;
     }
     if (options->dump_tokens) {
-        dump_tokens(&tokens);
+        dump_tokens(&tokens, path);
     }
 
     phase_status = parser_parse(&source, &tokens, &diagnostics, &program);

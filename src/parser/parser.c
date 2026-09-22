@@ -637,33 +637,6 @@ static AstNode *parse_assignment_no_semicolon(Parser *parser)
     return node;
 }
 
-static AstNode *parse_condition_operand(Parser *parser)
-{
-    const Token *token = current_token(parser);
-    if (token->kind == TOKEN_IDENTIFIER) { (void)advance(parser); return make_identifier(parser, token); }
-    if (token->kind == TOKEN_LITERAL_INTEGER || token->kind == TOKEN_LITERAL_REAL) return parse_primary(parser);
-    syntax_error(parser, token, "E-SIN-006",
-                 "condicao exige identificador escalar ou literal numerico");
-    if (!check(parser, TOKEN_EOF)) (void)advance(parser);
-    return NULL;
-}
-
-static AstNode *parse_control_condition(Parser *parser)
-{
-    AstNode *left = parse_condition_operand(parser);
-    const Token *op;
-    AstNode *right;
-    if (left == NULL) return NULL;
-    if (!is_comparator(current_token(parser)->kind)) {
-        syntax_error(parser, current_token(parser), "E-SIN-006",
-                     "condicao exige comparador '<', '>', '==' ou '!'");
-        ast_node_destroy(left); return NULL;
-    }
-    op = advance(parser);
-    right = parse_condition_operand(parser);
-    return make_binary(parser, left, op, right);
-}
-
 static AstNode *parse_return(Parser *parser)
 {
     const Token *start = advance(parser);
@@ -687,7 +660,7 @@ static AstNode *parse_while(Parser *parser)
     AstNode *body;
     AstNode *node;
     (void)expect(parser, TOKEN_LEFT_PAREN, "esperado '(' apos durante");
-    condition = parse_control_condition(parser);
+    condition = parse_expression(parser);
     (void)expect(parser, TOKEN_RIGHT_PAREN, "esperado ')' apos condicao de durante");
     (void)expect(parser, TOKEN_KW_EDAI, "esperado 'edai' apos durante");
     body = parse_block(parser);
@@ -710,7 +683,7 @@ static AstNode *parse_for(Parser *parser)
     (void)expect(parser, TOKEN_LEFT_PAREN, "esperado '(' apos repete");
     initializer = parse_assignment_no_semicolon(parser);
     (void)expect(parser, TOKEN_COMMA, "esperado ',' apos inicializacao de repete");
-    condition = parse_control_condition(parser);
+    condition = parse_expression(parser);
     (void)expect(parser, TOKEN_COMMA, "esperado ',' apos condicao de repete");
     iteration = parse_assignment_no_semicolon(parser);
     (void)expect(parser, TOKEN_RIGHT_PAREN, "esperado ')' apos cabecalho de repete");
@@ -751,7 +724,7 @@ static AstNode *parse_if(Parser *parser)
     AstNode *body;
     if (node == NULL) return NULL;
     (void)expect(parser, TOKEN_LEFT_PAREN, "esperado '(' apos cond");
-    condition = parse_control_condition(parser);
+    condition = parse_expression(parser);
     (void)expect(parser, TOKEN_RIGHT_PAREN, "esperado ')' apos condicao");
     (void)expect(parser, TOKEN_KW_EDAI, "esperado 'edai' apos condicao");
     body = parse_block(parser);
@@ -773,7 +746,7 @@ static AstNode *parse_if(Parser *parser)
             break;
         }
         (void)expect(parser, TOKEN_LEFT_PAREN, "esperado '(' apos casocontrario cond");
-        condition = parse_control_condition(parser);
+        condition = parse_expression(parser);
         (void)expect(parser, TOKEN_RIGHT_PAREN, "esperado ')' apos condicao");
         (void)expect(parser, TOKEN_KW_EDAI, "esperado 'edai' apos condicao");
         body = parse_block(parser);
