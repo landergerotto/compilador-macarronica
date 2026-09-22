@@ -168,6 +168,26 @@ liberação dos objetos aparecem em [`docs/pipeline.md`](docs/pipeline.md). Para
 uma explicação voltada à apresentação do trabalho, consulte
 [`docs/guia-defesa-autoria.md`](docs/guia-defesa-autoria.md).
 
+## Uso de ferramentas de IA generativa
+
+Conforme a Seção 8 do enunciado, o grupo declara o uso de ferramentas de IA
+generativa como apoio ao desenvolvimento.
+
+| Parte do projeto | Em que consistiu o apoio |
+|---|---|
+| [`src/semantic/semantic.c`](src/semantic/semantic.c) — `statement_always_returns` e `block_always_returns` | Identificação de que a verificação anterior apenas contava a existência de um `respost`, e implementação da análise de fluxo de controle que exige retorno em todos os caminhos |
+| [`src/parser/parser.c`](src/parser/parser.c) — limite em cadeias de operadores | Identificação de um estouro de pilha com expressões muito longas e aplicação do limite de profundidade que já existia no projeto |
+| [`src/lexer/token.c`](src/lexer/token.c), [`src/lexer/token.h`](src/lexer/token.h) e [`src/compiler.c`](src/compiler.c) — `token_print` | Correção do prefixo fixo que aparecia no lugar do caminho do arquivo em `--dump-tokens` |
+| [`tests/run_tests.sh`](tests/run_tests.sh) e [`tests/semantic/invalido_retorno_parcial.mac`](tests/semantic/invalido_retorno_parcial.mac) | Casos de regressão correspondentes às correções acima |
+| Revisão de código | Leitura da base em busca de defeitos, com verificação manual de cada achado antes de qualquer alteração |
+
+Esta tabela cobre o apoio de IA nas contribuições da branch `luiz/melhorias`.
+Cada integrante complementa a lista com o próprio uso nas demais partes do
+projeto.
+
+Todo o código entregue foi revisado pelos integrantes, que respondem por
+qualquer trecho da implementação.
+
 ## Próximas fases
 
 A AST já recebe IDs de tipos e símbolos, mas `compiler_compile_file` libera a
