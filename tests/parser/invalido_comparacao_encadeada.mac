@@ -1,0 +1,8 @@
+vazio principal() @
+[
+    inteira a, b, c;
+    cond (a < b < c) edai
+    [
+        respost;
+    ]
+]

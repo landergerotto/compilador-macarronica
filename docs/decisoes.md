@@ -39,8 +39,8 @@ Este documento separa o que é dito pela fonte do que foi decidido pelo projeto.
 
    O valor de um literal `palavra` chega à AST já decodificado: por exemplo, os dois caracteres `\` e `n` da origem tornam-se uma quebra de linha no valor semântico. O nó da AST preserva seu `SourceSpan`, apontando para toda a grafia original do literal, incluindo as aspas, para que diagnósticos continuem referenciando o arquivo-fonte corretamente.
 
-   Não há literal próprio de `duplocarpado` em 0.1.0. Um valor desse tipo pode vir de parâmetro, variável ou chamada de retorno `duplocarpado`. Acrescentar sufixo ou promoção exige nova decisão.
-4. **Impacto:** o lexer emite tokens distintos para inteiro, real, palavra e booleano. Texto sem fechamento e escape desconhecido são erros léxicos. Lexer e parser devem definir um único responsável pela decodificação, sem decodificar duas vezes; ao construir `AST_LITERAL_EXPR` com `AST_LITERAL_STRING`, o conteúdo armazenado é o valor decodificado e o `SourceSpan` é o da origem. A IR futura recebe o valor decodificado e pode reutilizar o `SourceSpan` para diagnóstico. A limitação de `duplocarpado` deve ser coberta por teste e não pode ser contornada com coerção implícita.
+   Não há literal próprio de `duplocarpado` em 0.1.0. Um valor desse tipo pode vir de parâmetro, variável ou chamada de retorno `duplocarpado`. Acrescentar sufixo ou promoção exige nova decisão. Literais também precisam caber na representação usada pelo compilador: inteiros acima de `LLONG_MAX` e reais cuja conversão ultrapassa `DBL_MAX` são rejeitados.
+4. **Impacto:** o lexer emite tokens distintos para inteiro, real, palavra e booleano. Texto sem fechamento, escape desconhecido e literal numérico fora da faixa são erros léxicos. Lexer e parser devem definir um único responsável pela decodificação, sem decodificar duas vezes; ao construir `AST_LITERAL_EXPR` com `AST_LITERAL_STRING`, o conteúdo armazenado é o valor decodificado e o `SourceSpan` é o da origem. A IR futura recebe o valor decodificado e pode reutilizar o `SourceSpan` para diagnóstico. A limitação de `duplocarpado` deve ser coberta por teste e não pode ser contornada com coerção implícita.
 
 ## D-005 - Comentários e conflito com `//`
 
@@ -54,7 +54,7 @@ Este documento separa o que é dito pela fonte do que foi decidido pelo projeto.
 1. **Regra oficial:** a declaração é `tipo vet{tamanho} nome, ... ;`; a fonte não mostra acesso a elemento.
 2. **Lacuna:** a sintaxe de indexação é uma ambiguidade obrigatória da seção 4.3.
 3. **Decisão do projeto:** acesso e atribuição a elemento usam `nome{expressão}`. O tamanho da declaração deve ser um literal `inteira` maior que zero. O índice deve ter tipo `inteira`; índices começam em zero. O nome de um vetor inteiro não é um valor legível nem um destino atribuível: é proibido ler, copiar ou atribuir o vetor como unidade. Somente `nome{indice}` produz um elemento que pode ser usado como `rvalue` ou `lvalue`.
-4. **Impacto:** o lexer já possui `{` e `}`; o parser diferencia declaração pelo token `vet` e indexação após identificador. A semântica rejeita indexar não vetor, usar um vetor inteiro em expressão ou como argumento/retorno, atribuir a ele e copiá-lo; também verifica limites quando tamanho e índice são constantes. A AST/semântica marca apenas o acesso a elemento com capacidades de valor e destino. A IR futura representa a indexação explicitamente e não precisa de operação de cópia de vetor nesta versão.
+4. **Impacto:** o lexer já possui `{` e `}`; o parser diferencia declaração pelo token `vet` e indexação após identificador. A semântica rejeita indexar não vetor, usar um vetor inteiro em expressão ou como argumento/retorno, atribuir a ele e copiá-lo. Ela também verifica os limites quando consegue avaliar estaticamente a expressão inteira usada como índice. A AST/semântica marca apenas o acesso a elemento com capacidades de valor e destino. A IR futura representa a indexação explicitamente e não precisa de operação de cópia de vetor nesta versão.
 
 ## D-007 - Chamada de função
 
@@ -67,15 +67,15 @@ Este documento separa o que é dito pela fonte do que foi decidido pelo projeto.
 
 1. **Regra oficial:** `vazio` existe apenas como tipo de retorno; a forma mostrada é `respost valor;`. A fonte não define o retorno de função `vazio`.
 2. **Lacuna:** omitir `respost` ou usar `respost;` são alternativas igualmente plausíveis.
-3. **Decisão do projeto:** em função `vazio`, `respost;` é permitido e opcional; `respost expressão;` é proibido. Em função não vazia, somente `respost expressão;` é permitido e a expressão deve ter exatamente o tipo declarado. Nesta etapa exige-se ao menos um retorno em função não vazia, sem análise de cobertura de todos os caminhos.
-4. **Impacto:** o parser aceita as duas formas. A semântica usa o tipo da função corrente, rejeita retorno fora de função e emite aviso/erro de função não vazia sem retorno. A IR futura terá `RETURN` com operando opcional.
+3. **Decisão do projeto:** em função `vazio`, `respost;` é permitido e opcional, enquanto `respost expressão;` é proibido. Em função não vazia, todo caminho possível de execução deve chegar a `respost expressão;`, e a expressão deve ter exatamente o tipo declarado. Uma cadeia `cond` só garante retorno quando possui um `casocontrario` final e todos os ramos garantem retorno. `durante` e `repete` não garantem retorno, pois podem executar zero vezes.
+4. **Impacto:** o parser aceita `respost` com ou sem expressão. A semântica usa o tipo da função corrente, rejeita retorno fora de função e produz `E-SEM-032` quando uma função não vazia deixa algum caminho sem valor. A IR futura terá `RETURN` com operando opcional e receberá corpos cuja cobertura de retorno já foi validada.
 
 ## D-009 - Condições de controle
 
 1. **Regra oficial:** a fonte restringe condição a `VAR COMPARADOR VAR`, `VAR COMPARADOR NUM` ou `NUM COMPARADOR NUM`.
 2. **Lacuna:** booleanos e operadores lógicos existem, mas a fonte não os integra à regra de condição.
-3. **Decisão do projeto:** a versão 0.1.0 preserva a regra restritiva. Em `cond`, `durante` e `repete`, a condição tem exatamente dois operandos simples (identificador escalar ou literal numérico) e um comparador `<`, `>`, `==` ou `!`. Não são aceitas chamada, indexação, aritmética, literal booleano, `NÃO`, `E`, `OU` ou `XOR` nessas posições. Aceitar expressão booleana completa será uma extensão versionada, nunca uma ampliação silenciosa.
-4. **Impacto:** o parser possui uma produção `condicao_controle` separada de `expressao`. A semântica exige operandos declarados, escalares, comparáveis e de mesmo tipo. A IR futura ainda pode normalizar o resultado para `bool`.
+3. **Decisão do projeto:** fica aprovada uma extensão explícita sobre a regra oficial restritiva. As condições de `cond`, `casocontrario cond`, `durante` e `repete` aceitam sintaticamente qualquer `expressao`, sem importar construções de outras linguagens. A análise semântica exige que o resultado da expressão seja `bool`. Assim, são válidos literais e variáveis booleanas, `NÃO`, chamadas com retorno `bool`, comparações e combinações com quantos operadores `E`, `OU` e `XOR` forem necessários. A ordem de avaliação sintática segue a precedência e a associatividade de D-010.
+4. **Impacto:** o lexer não ganha tokens. O parser reutiliza a produção `expressao` em todas as estruturas de controle. A semântica verifica a expressão normalmente e rejeita a condição quando seu tipo final não é `bool`. A AST mantém a expressão completa como condição, e a IR futura recebe um valor booleano já validado. Esta decisão define o agrupamento sintático, mas ainda não escolhe entre curto-circuito e avaliação ansiosa para `E` e `OU`; isso deve ser resolvido antes do lowering para IR.
 
 ## D-010 - Precedência e associatividade
 
@@ -162,7 +162,6 @@ Este documento separa o que é dito pela fonte do que foi decidido pelo projeto.
 
 - Aprovar ou rejeitar promoção `inteira -> flut -> duplocarpado`.
 - Definir literal próprio de `duplocarpado`.
-- Decidir se condições aceitarão expressões booleanas completas.
 - Definir acesso a campos de registro.
 - Obter do professor uma sintaxe de entrada/saída para Macaronica ou uma dispensa explícita do caso de teste.
-- Decidir se funções não vazias deverão retornar em todos os caminhos por análise de fluxo.
+- Definir a ordem de avaliação dos operandos e se `E` e `OU` usam curto-circuito antes de implementar a IR.

@@ -1,75 +1,177 @@
 # Compilador Macaronica
 
-Front-end didatico da linguagem **Macaronica**, escrito em C99. Nesta etapa o
-programa le um arquivo `.mac` e executa, nesta ordem, os analisadores lexico,
-sintatico e semantico. O projeto nao implementa Zolang/Zoolang, interpretacao,
-IR, otimizacao ou geracao de assembly.
+Este projeto implementa, em C99, o front-end da linguagem Macaronica. O
+executável recebe um arquivo `.mac`, produz os tokens, monta a árvore sintática
+abstrata (AST) e faz a análise semântica. Nessa última fase, confere nomes,
+tipos, escopos, chamadas e retornos.
 
-## Preparacao no Windows
+A versão atual valida o código-fonte. Geração de IR, otimizações e código para
+a placa ainda não foram implementadas.
 
-Use o terminal **MSYS2 UCRT64** e instale GCC e Make, se necessario:
+## Requisitos
+
+- GCC
+- GNU Make ou `mingw32-make`
+- Bash para executar os testes
+
+A compilação usa C99 com `-Wall -Wextra -pedantic`.
+
+## Preparação no Windows
+
+O ambiente usado no desenvolvimento é o
+[MSYS2](https://www.msys2.org/) com o terminal UCRT64. Instale as ferramentas
+por esse terminal:
 
 ```sh
 pacman -S --needed mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-make
 ```
 
-Os executaveis esperados sao `C:\msys64\ucrt64\bin\gcc.exe` e
-`C:\msys64\ucrt64\bin\mingw32-make.exe`. No terminal UCRT64:
+O Makefile procura o Bash em `C:\msys64\usr\bin\bash.exe`. Se o MSYS2 estiver
+em outro diretório, ajuste a variável `BASH` ao chamar o Make.
 
-```sh
-mingw32-make
-mingw32-make test
-mingw32-make release
-mingw32-make clean
+No PowerShell, inclua as ferramentas no `PATH` da sessão:
+
+```powershell
+$env:Path = "C:\msys64\ucrt64\bin;C:\msys64\usr\bin;$env:Path"
 ```
 
-Em Linux, os mesmos alvos podem ser usados com `make`. Toda compilacao usa
-`-std=c99 -Wall -Wextra -pedantic`. O alvo padrao mantem os rastros temporarios
-de debug desta primeira etapa; `release` desliga esses rastros.
+Depois, compile e execute o exemplo:
 
-## Uso
+```powershell
+mingw32-make debug
+.\build\debug\macaronica.exe .\examples\algo.mac
+```
+
+Essa alteração do `PATH` vale somente para a janela atual do PowerShell.
+
+No terminal MSYS2 UCRT64, use:
+
+```sh
+mingw32-make debug
+./build/debug/macaronica.exe examples/algo.mac
+```
+
+## Compilação no Linux
+
+Com GCC, Make e Bash instalados:
+
+```sh
+make debug
+./build/debug/macaronica examples/algo.mac
+```
+
+## Alvos do Makefile
+
+| Linux | Windows | Resultado |
+|---|---|---|
+| `make` | `mingw32-make` | Compila a versão de debug |
+| `make debug` | `mingw32-make debug` | Compila a versão de debug |
+| `make release` | `mingw32-make release` | Compila a versão otimizada, sem os rastros de debug |
+| `make test` | `mingw32-make test` | Compila e executa os testes |
+| `make sanitize` | `mingw32-make sanitize` | Executa os testes com AddressSanitizer e UndefinedBehaviorSanitizer, quando disponíveis |
+| `make clean` | `mingw32-make clean` | Remove o diretório `build/` |
+
+Os executáveis ficam em `build/debug/`, `build/release/` ou
+`build/sanitize/`, conforme o alvo. No Windows, o nome recebe a extensão
+`.exe`.
+
+O build de debug escreve mensagens iniciadas por `[debug]` em `stderr`. O build
+de release desativa essas mensagens. Para recompilar tudo, use `make -B debug`
+ou `mingw32-make -B debug`.
+
+## Linha de comando
 
 ```text
-build/debug/macaronica [--dump-tokens] [--dump-ast] [--dump-symbols] arquivo.mac
-build/debug/macaronica --help
-build/debug/macaronica --version
+macaronica [--dump-tokens] [--dump-ast] [--dump-symbols] arquivo.mac
+macaronica --help
+macaronica --version
 ```
 
-Sem opcoes de dump, uma fonte aceita produz uma confirmacao. Diagnosticos e
-rastros de debug sao escritos em `stderr`; dumps e a confirmacao ficam em
-`stdout`. Os dumps combinados aparecem na ordem tokens, AST e simbolos.
+| Opção | Saída |
+|---|---|
+| `--dump-tokens` | Tokens produzidos pelo lexer |
+| `--dump-ast` | AST produzida pelo parser |
+| `--dump-symbols` | Tipos, escopos e símbolos produzidos pela análise semântica |
+| `--help` | Sintaxe da linha de comando |
+| `--version` | Versão do compilador |
 
-Codigos de saida:
+As opções de dump podem ser combinadas:
 
-| Codigo | Significado |
+```powershell
+.\build\debug\macaronica.exe --dump-tokens --dump-ast --dump-symbols .\examples\algo.mac
+```
+
+Os dumps seguem a ordem do pipeline: tokens depois do lexer, AST depois do
+parser e símbolos depois da análise semântica. O dump da AST acontece antes das
+anotações semânticas. Se a semântica rejeitar a fonte, `--dump-symbols` ainda
+pode mostrar as tabelas parciais construídas até o erro.
+
+Sem dumps, uma fonte aceita produz uma mensagem de confirmação em `stdout`.
+Os dumps também usam `stdout`. Diagnósticos e mensagens de debug usam
+`stderr`.
+
+### Códigos de saída
+
+| Código | Significado |
 |---:|---|
-| 0 | fonte aceita |
-| 1 | erro lexico, sintatico ou semantico na fonte |
-| 2 | uso da CLI, opcao ou extensao invalida |
-| 3 | falha ao abrir ou ler o arquivo |
-| 4 | falha interna, inclusive alocacao |
-
-Exemplo:
-
-```sh
-build/debug/macaronica --dump-tokens examples/algo.mac
-```
+| 0 | Fonte aceita |
+| 1 | Erro léxico, sintático ou semântico |
+| 2 | Uso incorreto da CLI, opção desconhecida ou extensão inválida |
+| 3 | Falha ao abrir ou ler o arquivo |
+| 4 | Falha interna, inclusive erro de alocação |
 
 ## Testes
 
-`make test` percorre `tests/manifest.tsv`, confere aceitacao/rejeicao e a fase
-dos diagnosticos, executa entradas truncadas, casos semanticos adicionais e
-confere que os dumps sao deterministicos. O runner usa `timeout` quando
-disponivel. `make sanitize` recompila com AddressSanitizer e
-UndefinedBehaviorSanitizer e roda a mesma suite; esse alvo e ferramenta de
-desenvolvimento e depende do suporte dos sanitizers no host.
+No Windows:
 
-A sintaxe e as lacunas resolvidas estao em `docs/gramatica.md` e
-`docs/decisoes.md`. O ownership entre fases esta em `docs/pipeline.md`.
+```powershell
+$env:Path = "C:\msys64\ucrt64\bin;C:\msys64\usr\bin;$env:Path"
+mingw32-make test
+```
 
-## Uso de inteligencia artificial
+No Linux:
 
-Este projeto foi desenvolvido com apoio de inteligencia artificial generativa
-para estruturar o codigo, revisar contratos e ampliar os testes. As decisoes de
-linguagem foram conferidas contra o enunciado da Macaronica; regras de
-Zolang/Zoolang nao foram importadas.
+```sh
+make test
+```
+
+A suíte percorre programas válidos e inválidos, confere a fase dos
+diagnósticos, exercita a CLI e compara duas execuções de cada dump. Também há
+casos de entrada truncada, profundidade excessiva, regras semânticas e retorno
+em todos os caminhos de funções não vazias. O script usa um limite de dez
+segundos por execução quando o comando `timeout` está disponível.
+
+O resumo final tem este formato:
+
+```text
+Resultado: N passou/passaram; 0 falhou/falharam.
+```
+
+## Organização do repositório
+
+| Caminho | Conteúdo |
+|---|---|
+| [`src/main.c`](src/main.c) | Interface de linha de comando |
+| [`src/compiler.c`](src/compiler.c) e [`src/compiler.h`](src/compiler.h) | Driver e API atual do front-end |
+| [`src/lexer/`](src/lexer/) | Lexer e tokens |
+| [`src/parser/`](src/parser/) | Parser e AST |
+| [`src/semantic/`](src/semantic/) | Tipos, símbolos, escopos e análise semântica |
+| [`src/common/`](src/common/) | Arquivo-fonte, posições, status e diagnósticos |
+| [`examples/`](examples/) | Programa de exemplo |
+| [`tests/`](tests/) | Casos de teste, manifesto e runner |
+| [`docs/`](docs/) | Especificação operacional e explicações do projeto |
+
+A sintaxe aceita está em [`docs/gramatica.md`](docs/gramatica.md). As escolhas
+feitas para preencher lacunas da especificação estão em
+[`docs/decisoes.md`](docs/decisoes.md). O contrato entre as fases e a ordem de
+liberação dos objetos aparecem em [`docs/pipeline.md`](docs/pipeline.md). Para
+uma explicação voltada à apresentação do trabalho, consulte
+[`docs/guia-defesa-autoria.md`](docs/guia-defesa-autoria.md).
+
+## Próximas fases
+
+A AST já recebe IDs de tipos e símbolos, mas `compiler_compile_file` libera a
+AST e o resultado semântico antes de retornar. O trabalho de IR precisará expor
+uma unidade de compilação que mantenha esses objetos vivos, ou executar o
+lowering antes da limpeza. Ainda não existem módulos de IR, otimização ou
+backend, e nenhuma decisão da placa faz parte do front-end atual.
