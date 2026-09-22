@@ -50,7 +50,8 @@ Ao construir a AST, `LIT_PALAVRA` produz `AST_LITERAL_EXPR` com `AST_LITERAL_STR
 - literal de palavra sem fechamento antes de quebra de linha ou EOF;
 - escape textual desconhecido;
 - sequência UTF-8 inválida;
-- número real incompleto, como `12.`.
+- número real incompleto, como `12.`;
+- literal inteiro acima de `LLONG_MAX` ou literal real cuja conversão ultrapassa `DBL_MAX`.
 
 ## 2. Unidade de compilação
 
@@ -145,35 +146,28 @@ Somente chamada com retorno `vazio` pode ser usada como `chamada_comando`. `resp
 
 ## 6. Controle
 
-### 6.1 Condição oficial restritiva
+### 6.1 Condições
 
 ```ebnf
-condicao_controle = operando_condicao, comparador, operando_condicao ;
-
-operando_condicao = IDENT
-                   | LIT_INTEIRA
-                   | LIT_REAL
-                   ;
-
-comparador = "<" | ">" | "==" | "!" ;
+condicao = expressao ;
 ```
 
-Esta produção preserva a regra oficial `VAR COMPARADOR VAR | VAR COMPARADOR NUM | NUM COMPARADOR NUM`. Ela não é um sinônimo de `expressao`.
+A fonte limita condições a `VAR COMPARADOR VAR | VAR COMPARADOR NUM | NUM COMPARADOR NUM`. A decisão D-009 aprova uma extensão do projeto: qualquer expressão é aceita sintaticamente como condição, mas seu tipo final deve ser `bool`. Essa extensão pertence à Macaronica do projeto e não importa regras de outra linguagem.
 
 ### 6.2 Estruturas
 
 ```ebnf
 repeticao_repete = "repete", "(",
                    atribuicao_sem_ponto_virgula, ",",
-                   condicao_controle, ",",
+                   condicao, ",",
                    atribuicao_sem_ponto_virgula,
                    ")", "edai", bloco ;
 
-repeticao_durante = "durante", "(", condicao_controle, ")",
+repeticao_durante = "durante", "(", condicao, ")",
                     "edai", bloco ;
 
-decisao = "cond", "(", condicao_controle, ")", "edai", bloco,
-          { "casocontrario", "cond", "(", condicao_controle, ")",
+decisao = "cond", "(", condicao, ")", "edai", bloco,
+          { "casocontrario", "cond", "(", condicao, ")",
             "edai", bloco },
           [ "casocontrario", "edai", bloco ] ;
 ```
@@ -182,7 +176,7 @@ decisao = "cond", "(", condicao_controle, ")", "edai", bloco,
 
 ## 7. Expressões
 
-As expressões gerais aparecem em atribuições, argumentos, retornos e índices. A existência delas não amplia `condicao_controle`.
+As expressões aparecem em atribuições, argumentos, retornos, índices e condições de controle. Em uma condição, a expressão é sintaticamente geral e deve resultar em `bool` após a análise semântica.
 
 ```ebnf
 expressao         = expr_ou ;
@@ -247,6 +241,12 @@ primaria          = IDENT
 
 Comparações encadeadas como `a < b < c` são erro sintático. Pela tabela, `NÃO a == b` significa `NÃO (a == b)`, e `-2 ^ 2` significa `(-2) ^ 2`.
 
+Os operadores lógicos podem se repetir sem limite gramatical. Por exemplo, `a < b E c < d E e < f` associa à esquerda. Em `a < b OU c < d E e < f XOR VER`, primeiro são resolvidas as comparações, depois `E`, depois `XOR` e por último `OU`. Parênteses podem alterar esse agrupamento.
+
+Essa precedência define a forma da AST, não a ordem de execução dos operandos.
+A escolha entre curto-circuito e avaliação ansiosa de `E` e `OU` permanece
+pendente para a futura IR.
+
 ## 8. Regras estáticas de tipos
 
 | Construção | Tipos aceitos | Resultado |
@@ -277,12 +277,19 @@ Um identificador que nomeia um vetor não é, isoladamente, `lvalue` nem `rvalue
 5. Validar alvo e tipo de cada atribuição.
 6. Validar quantidade e tipos de argumentos de chamada.
 7. Impedir uso de retorno `vazio` como valor.
-8. Validar `respost` contra o retorno declarado e exigir ao menos um em função não vazia.
-9. Validar operadores pela tabela da seção 8.
-10. Validar tamanho e índice de vetores; conferir limite quando o índice for constante; rejeitar qualquer uso do vetor inteiro como valor ou destino.
-11. Não criar escopo novo para blocos de controle nesta versão.
+8. Validar `respost` contra o retorno declarado. Toda função não vazia deve garantir retorno em todos os caminhos: uma cadeia `cond` precisa de `casocontrario` final e retorno em todos os ramos; `durante` e `repete` não garantem retorno.
+9. Exigir resultado `bool` nas condições de `cond`, `casocontrario cond`, `durante` e `repete`.
+10. Validar operadores pela tabela da seção 8.
+11. Validar tamanho e índice de vetores; conferir o limite quando a expressão inteira do índice puder ser avaliada estaticamente; rejeitar qualquer uso do vetor inteiro como valor ou destino.
+12. Não criar escopo novo para blocos de controle nesta versão.
 
-## 10. Diagnósticos esperados
+## 10. Limites operacionais
+
+O parser limita expressões e blocos a 512 níveis de profundidade. Esse limite
+protege a pilha do processo e produz `E-SIN-009`; ele pertence à implementação,
+não à definição da linguagem.
+
+## 11. Diagnósticos esperados
 
 Formato comum:
 
@@ -300,7 +307,7 @@ Famílias recomendadas:
 
 O token inesperado e sua grafia devem aparecer no erro sintático quando disponíveis. Após erro, toda fase precisa avançar ou sincronizar; nenhuma entrada inválida pode provocar travamento ou laço infinito.
 
-## 11. Exemplos conformes à versão 0.1.0
+## 12. Exemplos conformes à versão 0.1.0
 
 ```text
 outrafuncao inteira quadrado(inteira n) @
@@ -314,7 +321,7 @@ inteira principal() @
     numero receba 5;
     resultado receba quadrado(numero);
 
-    cond (resultado > 20) edai
+    cond (resultado > 20 E numero > 0 OU resultado == 0 XOR FAL) edai
     [
         respost 1;
     ]
@@ -341,12 +348,12 @@ vazio principal() @
 ]
 ```
 
-## 12. Formas intencionalmente não aceitas
+## 13. Formas intencionalmente não aceitas
 
 ```text
 // comentário            # `//` é divisão inteira
-cond (VER) edai [ ]      # condição oficial exige comparação
-cond (a < b E c < d)     # extensão booleana ainda não aprovada
+cond (1 + 2) edai [ ]    # sintaticamente válida, mas o resultado não é `bool`
+cond (a < b < c) edai [ ] # comparações não podem ser encadeadas
 inteira x;
 x receba 1.0;            # `1.0` é flut e não há promoção/conversão
 func inteira f() @ [ ]   # usar `outrafuncao`

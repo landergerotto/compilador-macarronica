@@ -1,5 +1,5 @@
 /.github
-/build/
+docs/guia-defesa-autoria.md
 *.o
 *.obj
 *.exe

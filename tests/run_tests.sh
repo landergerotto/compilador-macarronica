@@ -100,7 +100,9 @@ done < "$test_root/manifest.tsv"
 
 run_source_case 'integration/valido_minimo.mac' aceito '-'
 run_source_case 'lexer/invalido_real_truncado.mac' rejeitado lexica
-run_source_case 'parser/invalido_truncado_bloco.mac' rejeitado sintatica
+for source_path in "$test_root"/parser/invalido_*.mac; do
+    run_source_case "parser/$(basename -- "$source_path")" rejeitado sintatica
+done
 
 for source_path in "$test_root"/semantic/valido_*.mac; do
     run_source_case "semantic/$(basename -- "$source_path")" aceito '-'
@@ -109,6 +111,21 @@ done
 for source_path in "$test_root"/semantic/invalido_*.mac; do
     run_source_case "semantic/$(basename -- "$source_path")" rejeitado semantica
 done
+
+precedence_source="$test_root/parser/valido_precedencia_condicao.mac"
+run_compiler --dump-ast "$precedence_source" \
+    >"$temporary_dir/precedence-ast.txt" 2>"$temporary_dir/precedence-ast.err"
+status=$?
+if [ "$status" -eq 0 ] && awk '
+    /operator=OU / { ou_indent = index($0, "operator=OU"); in_ou = 1; next }
+    in_ou && /operator=E / && index($0, "operator=E") > ou_indent { found = 1 }
+    END { exit found ? 0 : 1 }
+' "$temporary_dir/precedence-ast.txt"; then
+    record_pass 'AST preserva precedencia de E sobre OU em condicao'
+else
+    record_failure 'AST preserva precedencia de E sobre OU em condicao' \
+        "codigo $status ou arvore sem OU contendo E"
+fi
 
 deep_source="$temporary_dir/profundidade_blocos.mac"
 {
