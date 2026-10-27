@@ -78,7 +78,7 @@ significado deve ser atribuído a ele até que uma decisão do projeto o defina.
 | `E-SEM-017` | Operador incompatível com os operandos | Um operador unário ou binário recebe tipos que não aceita. A mensagem distingue um operando de dois operandos. | `VER + FAL` |
 | `E-SEM-018` | Nó inválido como expressão | A AST contém, em posição de expressão, um tipo de nó que não representa expressão. É uma defesa interna da AST. | — |
 | `E-SEM-019` | Alvo não gravável | O lado esquerdo de `receba` não está marcado como `lvalue`. | AST com literal como destino |
-| `E-SEM-020` | Tipo incompatível na atribuição | O valor não é atribuível ao tipo do destino; a versão atual exige tipos idênticos. | `inteira x; x receba VER;` |
+| `E-SEM-020` | Tipo incompatível na atribuição | O valor não é atribuível ao tipo do destino; aceitam-se tipos identicos ou as promocoes numericas de D-012. | `inteira x; x receba VER;` |
 | `E-SEM-021` | Condição não booleana | A condição de `cond`, `durante` ou `repete` não resulta em `bool`. | `cond (1) edai [ ]` |
 | `E-SEM-022` | `respost` fora de função | Um nó de retorno aparece sem função ativa. É principalmente uma defesa da AST, pois o parser normal só cria comandos dentro de funções. | — |
 | `E-SEM-023` | Função `vazio` retorna valor | `respost` contém expressão dentro de função com retorno `vazio`. | `respost 1;` em função `vazio` |

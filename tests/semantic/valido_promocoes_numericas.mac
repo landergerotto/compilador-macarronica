@@ -1,0 +1,26 @@
+outrafuncao flut paraflut(inteira n) @ [ respost n; ]
+outrafuncao duplocarpado paraduplo(inteira n) @ [ respost n; ]
+outrafuncao duplocarpado ampliado(flut n) @ [ respost n; ]
+outrafuncao flut ecoflut(flut n) @ [ respost n; ]
+outrafuncao duplocarpado ecoduplo(duplocarpado n) @ [ respost n; ]
+vazio principal() @
+[
+    inteira i;
+    flut f;
+    duplocarpado d;
+    duplocarpado vet{2} valores;
+    i receba 9;
+    f receba i;
+    d receba i;
+    d receba f;
+    valores{0} receba i;
+    valores{1} receba f;
+    f receba ecoflut(i);
+    d receba ecoduplo(i);
+    d receba ecoduplo(f);
+    f receba paraflut(i);
+    d receba paraduplo(i);
+    d receba ampliado(f);
+    d receba raiz(d);
+    respost;
+]

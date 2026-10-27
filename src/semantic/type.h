@@ -82,7 +82,9 @@ int type_is_numeric(const TypeTable *table, size_t type_id);
 int type_is_scalar(const TypeTable *table, size_t type_id);
 
 /*
- * Hoje so aceita tipos iguais. TYPE_ID_ERROR passa de proposito, porque o erro
+ * Aceita tipos iguais e inteira -> flut/duplocarpado, flut -> duplocarpado.
+ * Usado em atribuicoes, argumentos e retornos; nao promove operadores.
+ * TYPE_ID_ERROR passa de proposito, porque o erro
  * verdadeiro ja foi mostrado antes e nao queremos criar mensagens em cascata.
  */
 int type_is_assignable(size_t target_type_id, size_t value_type_id);

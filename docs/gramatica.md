@@ -262,9 +262,9 @@ pendente para a futura IR.
 | `NÃO` | `bool` | `bool` |
 | `E`, `OU`, `XOR` | `bool`, `bool` | `bool` |
 | `nome{indice}` | `nome` é vetor; índice `inteira` | tipo do elemento |
-| `nome(args)` | argumentos idênticos à assinatura | retorno declarado |
+| `nome(args)` | argumentos compativeis com a assinatura conforme D-012 | retorno declarado |
 
-Não há promoção numérica nem concatenação de `palavra`. Atribuição, argumento e retorno exigem tipo exato. `vazio` não é tipo de valor.
+Atribuicao, argumento e retorno aceitam tipos identicos ou promocao `inteira -> flut`, `inteira -> duplocarpado` e `flut -> duplocarpado`. Conversoes inversas e casts explicitos nao sao aceitos. Operadores mantem as regras da tabela, sem promocao de operandos. Nao ha concatenacao de `palavra`. `vazio` nao e tipo de valor.
 
 Um identificador que nomeia um vetor não é, isoladamente, `lvalue` nem `rvalue`. O vetor completo não pode ser lido, copiado, atribuído, passado como argumento ou retornado. Somente `nome{indice}` denota um elemento com o tipo declarado do vetor e pode funcionar como destino ou valor.
 
@@ -355,6 +355,6 @@ vazio principal() @
 cond (1 + 2) edai [ ]    # sintaticamente válida, mas o resultado não é `bool`
 cond (a < b < c) edai [ ] # comparações não podem ser encadeadas
 inteira x;
-x receba 1.0;            # `1.0` é flut e não há promoção/conversão
+x receba 1.0;            # flut nao pode ser convertido implicitamente para inteira
 func inteira f() @ [ ]   # usar `outrafuncao`
 ```

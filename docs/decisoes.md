@@ -39,8 +39,8 @@ Este documento separa o que é dito pela fonte do que foi decidido pelo projeto.
 
    O valor de um literal `palavra` chega à AST já decodificado: por exemplo, os dois caracteres `\` e `n` da origem tornam-se uma quebra de linha no valor semântico. O nó da AST preserva seu `SourceSpan`, apontando para toda a grafia original do literal, incluindo as aspas, para que diagnósticos continuem referenciando o arquivo-fonte corretamente.
 
-   Não há literal próprio de `duplocarpado` em 0.1.0. Um valor desse tipo pode vir de parâmetro, variável ou chamada de retorno `duplocarpado`. Acrescentar sufixo ou promoção exige nova decisão. Literais também precisam caber na representação usada pelo compilador: inteiros acima de `LLONG_MAX` e reais cuja conversão ultrapassa `DBL_MAX` são rejeitados.
-4. **Impacto:** o lexer emite tokens distintos para inteiro, real, palavra e booleano. Texto sem fechamento, escape desconhecido e literal numérico fora da faixa são erros léxicos. Lexer e parser devem definir um único responsável pela decodificação, sem decodificar duas vezes; ao construir `AST_LITERAL_EXPR` com `AST_LITERAL_STRING`, o conteúdo armazenado é o valor decodificado e o `SourceSpan` é o da origem. A IR futura recebe o valor decodificado e pode reutilizar o `SourceSpan` para diagnóstico. A limitação de `duplocarpado` deve ser coberta por teste e não pode ser contornada com coerção implícita.
+   Não há literal próprio de `duplocarpado` em 0.1.0. Um valor desse tipo pode vir de parâmetro, variável ou chamada de retorno `duplocarpado`. Promocoes seguem D-012; acrescentar sufixo exige nova decisao. Literais também precisam caber na representação usada pelo compilador: inteiros acima de `LLONG_MAX` e reais cuja conversão ultrapassa `DBL_MAX` são rejeitados.
+4. **Impacto:** o lexer emite tokens distintos para inteiro, real, palavra e booleano. Texto sem fechamento, escape desconhecido e literal numérico fora da faixa são erros léxicos. Lexer e parser devem definir um único responsável pela decodificação, sem decodificar duas vezes; ao construir `AST_LITERAL_EXPR` com `AST_LITERAL_STRING`, o conteúdo armazenado é o valor decodificado e o `SourceSpan` é o da origem. A IR futura recebe o valor decodificado e pode reutilizar o `SourceSpan` para diagnóstico. A ausencia de literal de duplocarpado e preservada; promocoes seguem D-012.
 
 ## D-005 - Comentários e conflito com `//`
 
@@ -106,8 +106,8 @@ Este documento separa o que é dito pela fonte do que foi decidido pelo projeto.
 
 1. **Regra oficial:** não há regra de conversão entre `inteira`, `flut` e `duplocarpado`.
 2. **Lacuna:** não se sabe se atribuições, argumentos, retornos ou operadores promovem tipos.
-3. **Decisão do projeto:** não há conversão implícita na versão 0.1.0. Atribuições, argumentos, retornos e operandos que exigem igualdade usam tipos idênticos. A promoção `inteira -> flut -> duplocarpado` é candidata para versão futura, condicionada à aprovação e documentação do grupo. Não existe cast explícito nesta versão.
-4. **Impacto:** a semântica nunca insere coerções; a IR não contém nós de conversão implícita.
+3. **Decisao do projeto (revisada com aprovacao do usuario):** atribuicoes, argumentos e retornos aceitam tipos identicos e as promocoes `inteira -> flut`, `inteira -> duplocarpado` e `flut -> duplocarpado`. Conversoes inversas, casts explicitos e promocao entre operandos de operadores nao sao aceitos. Vetores e registros nao ganham conversao estrutural; elementos numericos de vetores seguem a regra escalar. Inteiros grandes podem sofrer arredondamento ao serem convertidos para ponto flutuante.
+4. **Impacto:** a expressao mantem seu tipo original na AST. O destino da atribuicao, o parametro da assinatura ou o retorno declarado fornece o tipo esperado. O futuro gerador LLVM devera comparar esses tipos e emitir `sitofp` para inteiro -> ponto flutuante e `fpext` para flut -> duplocarpado. Inteira -> duplocarpado deve ser direta, sem passar por flut. Este repositorio ainda implementa somente o front-end; nao ha execucao nem geracao LLVM para validar conversoes em tempo de execucao.
 
 ## D-013 - Registros
 
@@ -160,7 +160,7 @@ Este documento separa o que é dito pela fonte do que foi decidido pelo projeto.
 
 ## Questões pendentes para uma versão posterior
 
-- Aprovar ou rejeitar promoção `inteira -> flut -> duplocarpado`.
+- Avaliar promocao entre operandos de operadores, fora do escopo de D-012.
 - Definir literal próprio de `duplocarpado`.
 - Definir acesso a campos de registro.
 - Obter do professor uma sintaxe de entrada/saída para Macaronica ou uma dispensa explícita do caso de teste.

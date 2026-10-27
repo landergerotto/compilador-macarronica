@@ -224,5 +224,11 @@ int type_is_assignable(size_t target_type_id, size_t value_type_id)
     if (target_type_id == TYPE_ID_ERROR || value_type_id == TYPE_ID_ERROR) {
         return 1;
     }
-    return target_type_id == value_type_id;
+    if (target_type_id == value_type_id) {
+        return 1;
+    }
+    /* Promocoes apenas no destino: operadores mantem suas regras proprias. */
+    return (value_type_id == TYPE_ID_INTEGER &&
+            (target_type_id == TYPE_ID_FLOAT || target_type_id == TYPE_ID_DOUBLE)) ||
+           (value_type_id == TYPE_ID_FLOAT && target_type_id == TYPE_ID_DOUBLE);
 }
