@@ -1,0 +1,22 @@
+inteira principal() @
+[
+    inteira i;
+    flut f;
+    duplocarpado d;
+    i receba leInteira();
+    f receba leFlut();
+    d receba leDuplocarpado();
+    imprimeInteira(i);
+    imprimePalavra("|");
+    imprimeFlut(f);
+    imprimePalavra("|");
+    imprimeDuplocarpado(d);
+    imprimePalavra("|");
+    imprimeBool(VER);
+    imprimePalavra("|");
+    imprimeBool(FAL);
+    imprimePalavra("|");
+    imprimePalavra("ola");
+    imprimeNl();
+    respost 0;
+]

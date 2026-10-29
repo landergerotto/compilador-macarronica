@@ -5,9 +5,13 @@ CFLAGS = -std=c99 $(WARNINGS) -O0 -g3
 LDFLAGS =
 LDLIBS = -lm
 
-ifeq ($(OS),Windows_NT)
+ifneq ($(wildcard C:/Windows/System32/cmd.exe),)
 EXEEXT = .exe
+ifneq ($(wildcard C:/msys64/usr/bin/bash.exe),)
 BASH = C:/msys64/usr/bin/bash.exe
+else
+BASH = C:/Program Files/Git/usr/bin/bash.exe
+endif
 else
 EXEEXT =
 BASH = bash
@@ -26,6 +30,8 @@ SOURCES = \
 	src/semantic/symbol.c \
 	src/semantic/semantic.c
 
+SOURCES += $(wildcard src/ir/codegen_llvm.c)
+
 HEADERS = $(wildcard src/*.h src/*/*.h)
 
 DEBUG_TARGET = build/debug/macaronica$(EXEEXT)
@@ -41,7 +47,7 @@ debug: $(DEBUG_TARGET)
 release: $(RELEASE_TARGET)
 
 test: $(DEBUG_TARGET)
-	$(BASH) tests/run_tests.sh "$(DEBUG_TARGET)"
+	"$(BASH)" tests/run_tests.sh "$(DEBUG_TARGET)" "$(CC)"
 
 sanitize: $(SANITIZE_TARGET)
 	$(BASH) tests/run_tests.sh "$(SANITIZE_TARGET)"

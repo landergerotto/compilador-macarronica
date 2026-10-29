@@ -1,6 +1,9 @@
 #include "semantic.h"
 
+#include <float.h>
 #include <limits.h>
+#include <math.h>
+#include <stdint.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
@@ -171,6 +174,47 @@ static int collect_record_names(SemanticAnalyzer *analyzer, AstNode *root)
     return !analyzer->allocation_failed;
 }
 
+/* Chamadas comuns, com assinaturas fixas e identidade preservada para a IR. */
+static int declare_builtins(SemanticAnalyzer *analyzer)
+{
+    static const struct {
+        const char *name;
+        BuiltinKind kind;
+        size_t return_type;
+        size_t parameter_type;
+    } builtins[] = {
+        { "imprimeInteira", BUILTIN_PRINT_INTEGER, TYPE_ID_VOID, TYPE_ID_INTEGER },
+        { "imprimeFlut", BUILTIN_PRINT_FLOAT, TYPE_ID_VOID, TYPE_ID_FLOAT },
+        { "imprimeDuplocarpado", BUILTIN_PRINT_DOUBLE, TYPE_ID_VOID, TYPE_ID_DOUBLE },
+        { "imprimePalavra", BUILTIN_PRINT_WORD, TYPE_ID_VOID, TYPE_ID_WORD },
+        { "imprimeBool", BUILTIN_PRINT_BOOL, TYPE_ID_VOID, TYPE_ID_BOOL },
+        { "imprimeNl", BUILTIN_PRINT_NEWLINE, TYPE_ID_VOID, TYPE_ID_NONE },
+        { "leInteira", BUILTIN_READ_INTEGER, TYPE_ID_INTEGER, TYPE_ID_NONE },
+        { "leFlut", BUILTIN_READ_FLOAT, TYPE_ID_FLOAT, TYPE_ID_NONE },
+        { "leDuplocarpado", BUILTIN_READ_DOUBLE, TYPE_ID_DOUBLE, TYPE_ID_NONE }
+    };
+    SourceSpan span = source_span(source_position(0U, 0U, 0U),
+                                  source_position(0U, 0U, 0U));
+    size_t index;
+    for (index = 0U; index < sizeof(builtins) / sizeof(builtins[0]); ++index) {
+        size_t symbol_id;
+        size_t count = builtins[index].parameter_type == TYPE_ID_NONE ? 0U : 1U;
+        Symbol *symbol;
+        if (!declare_symbol(analyzer, builtins[index].name, span,
+                            SYMBOL_NAMESPACE_FUNCTION, SYMBOL_BUILTIN_FUNCTION,
+                            builtins[index].return_type,
+                            analyzer->result->global_scope_id, &symbol_id) ||
+            !symbol_set_parameters(&analyzer->result->symbols, symbol_id,
+                                   &builtins[index].parameter_type, count)) {
+            allocation_error(analyzer, span);
+            return 0;
+        }
+        symbol = symbol_table_get_mut(&analyzer->result->symbols, symbol_id);
+        symbol->builtin_kind = builtins[index].kind;
+    }
+    return 1;
+}
+
 static int collect_function_signatures(SemanticAnalyzer *analyzer, AstNode *root)
 {
     size_t index;
@@ -188,6 +232,14 @@ static int collect_function_signatures(SemanticAnalyzer *analyzer, AstNode *root
         return_type = resolve_type_ref(analyzer, &node->as.function_decl.return_type,
                                        1, "retorno de funcao");
         parameter_count = node->as.function_decl.parameters.count;
+        if (node->as.function_decl.is_principal &&
+            (parameter_count != 0U ||
+             (return_type != TYPE_ID_INTEGER && return_type != TYPE_ID_VOID &&
+              return_type != TYPE_ID_ERROR))) {
+            semantic_error(analyzer, node->as.function_decl.name_span,
+                           "E-SEM-034",
+                           "principal deve retornar inteira ou vazio e nao receber parametros");
+        }
         if (parameter_count != 0U) {
             if (parameter_count > ((size_t)-1) / sizeof(*parameter_types)) {
                 allocation_error(analyzer, node->span);
@@ -273,9 +325,9 @@ static void declare_value_names(SemanticAnalyzer *analyzer,
                                   category == SYMBOL_FIELD ? "campo" : "variavel");
     declared_type = value_type;
     if (is_vector) {
-        if (array_size <= 0) {
+        if (array_size <= 0 || array_size > INT32_MAX) {
             semantic_error(analyzer, node->as.vector_decl.size_span, "E-SEM-005",
-                           "tamanho de vetor deve ser maior que zero; recebeu %lld",
+                           "tamanho de vetor deve estar entre 1 e 2147483647; recebeu %lld",
                            array_size);
             declared_type = TYPE_ID_ERROR;
         } else if (value_type != TYPE_ID_ERROR &&
@@ -436,39 +488,10 @@ static size_t analyze_call(SemanticAnalyzer *analyzer, AstNode *node,
     return function->type_id;
 }
 
-static int checked_integer_add(long long left, long long right, long long *result)
+/* Mesma aritmetica modular i32 da IR, sem overflow assinado em C. */
+static long long integer_from_bits(uint32_t bits)
 {
-    if ((right > 0 && left > LLONG_MAX - right) ||
-        (right < 0 && left < LLONG_MIN - right)) {
-        return 0;
-    }
-    *result = left + right;
-    return 1;
-}
-
-static int checked_integer_subtract(long long left, long long right,
-                                    long long *result)
-{
-    if ((right > 0 && left < LLONG_MIN + right) ||
-        (right < 0 && left > LLONG_MAX + right)) {
-        return 0;
-    }
-    *result = left - right;
-    return 1;
-}
-
-static int checked_integer_multiply(long long left, long long right,
-                                    long long *result)
-{
-    if (left > 0) {
-        if ((right > 0 && left > LLONG_MAX / right) ||
-            (right < 0 && right < LLONG_MIN / left)) return 0;
-    } else if (left < 0) {
-        if ((right > 0 && left < LLONG_MIN / right) ||
-            (right < 0 && right < LLONG_MAX / left)) return 0;
-    }
-    *result = left * right;
-    return 1;
+    return bits <= INT32_MAX ? (long long)bits : (long long)bits - 4294967296LL;
 }
 
 static int evaluate_integer_constant(const AstNode *node, long long *result)
@@ -492,9 +515,8 @@ static int evaluate_integer_constant(const AstNode *node, long long *result)
             *result = left;
             return 1;
         }
-        if (node->as.unary_expr.operator_kind == AST_OP_UNARY_MINUS &&
-            left != LLONG_MIN) {
-            *result = -left;
+        if (node->as.unary_expr.operator_kind == AST_OP_UNARY_MINUS) {
+            *result = integer_from_bits((uint32_t)(0U - (uint32_t)left));
             return 1;
         }
         return 0;
@@ -506,29 +528,35 @@ static int evaluate_integer_constant(const AstNode *node, long long *result)
     }
     switch (node->as.binary_expr.operator_kind) {
     case AST_OP_ADD:
-        return checked_integer_add(left, right, result);
+        *result = integer_from_bits((uint32_t)((uint64_t)(uint32_t)left +
+                                               (uint32_t)right));
+        return 1;
     case AST_OP_SUBTRACT:
-        return checked_integer_subtract(left, right, result);
+        *result = integer_from_bits((uint32_t)((uint64_t)(uint32_t)left -
+                                               (uint32_t)right));
+        return 1;
     case AST_OP_MULTIPLY:
-        return checked_integer_multiply(left, right, result);
+        *result = integer_from_bits((uint32_t)((uint64_t)(uint32_t)left *
+                                               (uint32_t)right));
+        return 1;
     case AST_OP_INTEGER_DIVIDE:
-        if (right == 0 || (left == LLONG_MIN && right == -1)) return 0;
+        if (right == 0 || (left == INT32_MIN && right == -1)) return 0;
         *result = left / right;
         return 1;
     case AST_OP_POWER:
         if (right < 0) return 0;
         {
             unsigned long long exponent = (unsigned long long)right;
-            long long power = left;
-            long long value = 1;
+            uint32_t power = (uint32_t)left;
+            uint32_t value = 1U;
             while (exponent != 0U) {
-                if ((exponent & 1U) != 0U &&
-                    !checked_integer_multiply(value, power, &value)) return 0;
+                if ((exponent & 1U) != 0U)
+                    value = (uint32_t)((uint64_t)value * power);
                 exponent >>= 1U;
-                if (exponent != 0U &&
-                    !checked_integer_multiply(power, power, &power)) return 0;
+                if (exponent != 0U)
+                    power = (uint32_t)((uint64_t)power * power);
             }
-            *result = value;
+            *result = integer_from_bits(value);
             return 1;
         }
     default:
@@ -628,6 +656,58 @@ static size_t invalid_operator(SemanticAnalyzer *analyzer, AstNode *node,
     return TYPE_ID_ERROR;
 }
 
+static size_t record_scope_id(const SemanticResult *result, size_t type_id)
+{
+    const Type *type = type_table_get(&result->types, type_id);
+    size_t index;
+    if (type == NULL || type->kind != TYPE_RECORD) return SCOPE_ID_NONE;
+    for (index = 0U; index < result->symbols.scope_count; ++index) {
+        const Scope *scope = &result->symbols.scopes[index];
+        if (scope->kind == SCOPE_RECORD &&
+            scope->owner_symbol_id == type->declaration_symbol_id)
+            return scope->id;
+    }
+    return SCOPE_ID_NONE;
+}
+
+static size_t analyze_field(SemanticAnalyzer *analyzer, AstNode *node)
+{
+    AstNode *base = node->as.field_expr.base;
+    size_t base_type = analyze_expression(analyzer, base, 0);
+    const Type *type = type_table_get(&analyzer->result->types, base_type);
+    size_t scope_id;
+    size_t field_id;
+    const Symbol *field;
+    unsigned int flags;
+    if (base_type == TYPE_ID_ERROR) {
+        annotate(node, TYPE_ID_ERROR, SYMBOL_ID_NONE, AST_SEMANTIC_ERROR);
+        return TYPE_ID_ERROR;
+    }
+    if (type == NULL || type->kind != TYPE_RECORD) {
+        semantic_error(analyzer, node->as.field_expr.field_span, "E-SEM-035",
+                       "acesso a campo exige registro, recebeu %s",
+                       type_name(&analyzer->result->types, base_type));
+        annotate(node, TYPE_ID_ERROR, SYMBOL_ID_NONE, AST_SEMANTIC_ERROR);
+        return TYPE_ID_ERROR;
+    }
+    scope_id = record_scope_id(analyzer->result, base_type);
+    field_id = symbol_table_lookup_current(&analyzer->result->symbols, scope_id,
+                                           SYMBOL_NAMESPACE_VALUE,
+                                           node->as.field_expr.field_name);
+    field = symbol_table_get(&analyzer->result->symbols, field_id);
+    if (field == NULL || field->category != SYMBOL_FIELD) {
+        semantic_error(analyzer, node->as.field_expr.field_span, "E-SEM-036",
+                       "registro '%s' nao possui campo '%s'", type->name,
+                       node->as.field_expr.field_name);
+        annotate(node, TYPE_ID_ERROR, SYMBOL_ID_NONE, AST_SEMANTIC_ERROR);
+        return TYPE_ID_ERROR;
+    }
+    flags = base->semantic.flags & (AST_SEMANTIC_LVALUE | AST_SEMANTIC_RVALUE);
+    if (field->type_id == TYPE_ID_ERROR) flags |= AST_SEMANTIC_ERROR;
+    annotate(node, field->type_id, field_id, flags);
+    return field->type_id;
+}
+
 static size_t analyze_binary(SemanticAnalyzer *analyzer, AstNode *node)
 {
     size_t left = analyze_expression(analyzer, node->as.binary_expr.left, 0);
@@ -684,9 +764,22 @@ static size_t analyze_binary(SemanticAnalyzer *analyzer, AstNode *node)
 
 static size_t analyze_unary(SemanticAnalyzer *analyzer, AstNode *node)
 {
-    size_t operand = analyze_expression(analyzer, node->as.unary_expr.operand, 0);
-    size_t result_type = operand;
+    AstNode *operand_node = node->as.unary_expr.operand;
+    size_t operand;
+    size_t result_type;
     int valid = 0;
+    /* O lexer guarda a magnitude; somente este contexto admite 2147483648. */
+    if (node->as.unary_expr.operator_kind == AST_OP_UNARY_MINUS &&
+        operand_node != NULL && operand_node->kind == AST_LITERAL_EXPR &&
+        operand_node->as.literal_expr.literal_kind == AST_LITERAL_INTEGER &&
+        operand_node->as.literal_expr.value.integer == 2147483648LL) {
+        annotate(operand_node, TYPE_ID_INTEGER, SYMBOL_ID_NONE,
+                 AST_SEMANTIC_RVALUE | AST_SEMANTIC_CONSTANT);
+        operand = TYPE_ID_INTEGER;
+    } else {
+        operand = analyze_expression(analyzer, operand_node, 0);
+    }
+    result_type = operand;
     if (operand == TYPE_ID_ERROR) {
         annotate(node, TYPE_ID_ERROR, SYMBOL_ID_NONE, AST_SEMANTIC_ERROR);
         return TYPE_ID_ERROR;
@@ -732,8 +825,27 @@ static size_t analyze_expression(SemanticAnalyzer *analyzer, AstNode *node,
         return analyze_identifier(analyzer, node);
     case AST_LITERAL_EXPR:
         switch (node->as.literal_expr.literal_kind) {
-        case AST_LITERAL_INTEGER: type_id = TYPE_ID_INTEGER; break;
-        case AST_LITERAL_REAL: type_id = TYPE_ID_FLOAT; break;
+        case AST_LITERAL_INTEGER:
+            type_id = TYPE_ID_INTEGER;
+            if (node->as.literal_expr.value.integer < INT32_MIN ||
+                node->as.literal_expr.value.integer > INT32_MAX) {
+                semantic_error(analyzer, node->span, "E-SEM-037",
+                               "literal inteira fora da faixa de 32 bits");
+                type_id = TYPE_ID_ERROR;
+            }
+            break;
+        case AST_LITERAL_REAL:
+            type_id = TYPE_ID_FLOAT;
+            if (!isfinite(node->as.literal_expr.value.real) ||
+                fabs(node->as.literal_expr.value.real) > FLT_MAX) {
+                semantic_error(analyzer, node->span, "E-SEM-038",
+                               "literal flut fora da faixa binary32");
+                type_id = TYPE_ID_ERROR;
+            } else {
+                node->as.literal_expr.value.real =
+                    (double)(float)node->as.literal_expr.value.real;
+            }
+            break;
         case AST_LITERAL_STRING: type_id = TYPE_ID_WORD; break;
         case AST_LITERAL_BOOLEAN: type_id = TYPE_ID_BOOL; break;
         default: type_id = TYPE_ID_ERROR; break;
@@ -746,6 +858,8 @@ static size_t analyze_expression(SemanticAnalyzer *analyzer, AstNode *node,
         return analyze_call(analyzer, node, allow_void_call);
     case AST_INDEX_EXPR:
         return analyze_index(analyzer, node);
+    case AST_FIELD_EXPR:
+        return analyze_field(analyzer, node);
     case AST_BINARY_EXPR:
         return analyze_binary(analyzer, node);
     case AST_UNARY_EXPR:
@@ -930,6 +1044,7 @@ static void analyze_record(SemanticAnalyzer *analyzer, AstNode *node)
     size_t old_scope = analyzer->current_scope_id;
     size_t record_scope;
     size_t index;
+    size_t field_index = 0U;
     if (node->semantic.symbol_id == SYMBOL_ID_NONE) return;
     if (!symbol_table_add_scope(&analyzer->result->symbols,
                                 analyzer->result->global_scope_id,
@@ -942,7 +1057,16 @@ static void analyze_record(SemanticAnalyzer *analyzer, AstNode *node)
     for (index = 0U; index < node->as.struct_decl.fields.count; ++index) {
         AstNode *field = node->as.struct_decl.fields.items[index];
         if (field != NULL && field->kind == AST_VAR_DECL) {
+            size_t name_index;
             declare_value_names(analyzer, field, SYMBOL_FIELD);
+            for (name_index = 0U; name_index < field->as.var_decl.names.count;
+                 ++name_index) {
+                Symbol *symbol = symbol_table_get_mut(
+                    &analyzer->result->symbols,
+                    field->as.var_decl.names.items[name_index].symbol_id);
+                if (symbol != NULL) symbol->field_index = field_index;
+                ++field_index;
+            }
         } else if (field != NULL) {
             semantic_error(analyzer, field->span, "E-SEM-030",
                            "declaracao de campo invalida");
@@ -951,6 +1075,79 @@ static void analyze_record(SemanticAnalyzer *analyzer, AstNode *node)
         }
     }
     analyzer->current_scope_id = old_scope;
+}
+
+/* Busca em profundidade com pilha explicita: registros por valor nao podem
+ * conter um caminho de campos que volte ao proprio tipo. */
+static void validate_record_cycles(SemanticAnalyzer *analyzer, SourceSpan span)
+{
+    typedef struct {
+        size_t type_id;
+        size_t scope_id;
+        size_t next_symbol;
+    } RecordFrame;
+    size_t type_count = analyzer->result->types.count;
+    unsigned char *color;
+    RecordFrame *stack;
+    size_t start;
+    if (type_count > ((size_t)-1) / sizeof(*stack)) {
+        allocation_error(analyzer, span);
+        return;
+    }
+    color = (unsigned char *)calloc(type_count, sizeof(*color));
+    stack = (RecordFrame *)malloc(type_count * sizeof(*stack));
+    if (color == NULL || stack == NULL) {
+        free(color);
+        free(stack);
+        allocation_error(analyzer, span);
+        return;
+    }
+    for (start = 0U; start < type_count; ++start) {
+        size_t depth = 0U;
+        if (analyzer->result->types.items[start].kind != TYPE_RECORD ||
+            color[start] != 0U) continue;
+        stack[depth].type_id = start;
+        stack[depth].scope_id = record_scope_id(analyzer->result, start);
+        stack[depth++].next_symbol = 0U;
+        color[start] = 1U;
+        while (depth != 0U) {
+            RecordFrame *frame = &stack[depth - 1U];
+            const Symbol *field = NULL;
+            size_t target;
+            while (frame->next_symbol < analyzer->result->symbols.count) {
+                const Symbol *candidate = &analyzer->result->symbols.items[
+                    frame->next_symbol++];
+                const Type *field_type;
+                if (candidate->category != SYMBOL_FIELD ||
+                    candidate->scope_id != frame->scope_id) continue;
+                field_type = type_table_get(&analyzer->result->types,
+                                             candidate->type_id);
+                if (field_type != NULL && field_type->kind == TYPE_RECORD) {
+                    field = candidate;
+                    break;
+                }
+            }
+            if (field == NULL) {
+                color[frame->type_id] = 2U;
+                --depth;
+                continue;
+            }
+            target = field->type_id;
+            if (color[target] == 1U) {
+                semantic_error(analyzer, field->declaration_span, "E-SEM-039",
+                               "campo '%s' cria ciclo de registros por valor com '%s'",
+                               field->name,
+                               type_name(&analyzer->result->types, target));
+            } else if (color[target] == 0U) {
+                color[target] = 1U;
+                stack[depth].type_id = target;
+                stack[depth].scope_id = record_scope_id(analyzer->result, target);
+                stack[depth++].next_symbol = 0U;
+            }
+        }
+    }
+    free(stack);
+    free(color);
 }
 
 /* Lacos nao garantem retorno, pois o corpo pode nao ser executado. */
@@ -1105,10 +1302,21 @@ FrontendStatus semantic_analyze(const SourceFile *source,
     SEMANTIC_DEBUG("iniciando `%s` com %zu declaracoes\n",
                    source->path != NULL ? source->path : "<fonte>",
                    root->as.program.declarations.count);
-    if (!collect_record_names(&analyzer, root) ||
+    if (!declare_builtins(&analyzer) ||
+        !collect_record_names(&analyzer, root) ||
         !collect_function_signatures(&analyzer, root)) {
         return FRONTEND_STATUS_INTERNAL_ERROR;
     }
+
+    /* Campos devem estar resolvidos mesmo quando o registro aparece depois
+     * da funcao que o utiliza. Globais continuam seguindo a ordem textual. */
+    for (index = 0U; index < root->as.program.declarations.count &&
+                     !analyzer.allocation_failed; ++index) {
+        AstNode *node = root->as.program.declarations.items[index];
+        if (node != NULL && node->kind == AST_STRUCT_DECL)
+            analyze_record(&analyzer, node);
+    }
+    validate_record_cycles(&analyzer, root->span);
 
     for (index = 0U;
          index < root->as.program.declarations.count &&
@@ -1119,7 +1327,6 @@ FrontendStatus semantic_analyze(const SourceFile *source,
         analyzer.current_scope_id = result->global_scope_id;
         switch (node->kind) {
         case AST_STRUCT_DECL:
-            analyze_record(&analyzer, node);
             break;
         case AST_FUNCTION_DECL:
             analyze_function(&analyzer, node);

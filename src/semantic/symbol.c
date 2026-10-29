@@ -120,6 +120,7 @@ int symbol_table_declare(SymbolTable *table,
     symbol->element_type_id = (size_t)-1;
     symbol->array_size = 0;
     symbol->is_principal = category == SYMBOL_PRINCIPAL;
+    symbol->field_index = SYMBOL_ID_NONE;
     if (out_symbol_id != NULL) *out_symbol_id = symbol->id;
     ++table->count;
     return 1;
@@ -209,7 +210,7 @@ const char *symbol_category_name(SymbolCategory category)
 {
     static const char *const names[] = {
         "registro", "funcao", "principal", "variavel global",
-        "variavel local", "parametro", "vetor", "campo"
+        "variavel local", "parametro", "vetor", "campo", "funcao intrinseca"
     };
     return (size_t)category < sizeof(names) / sizeof(names[0])
                ? names[(size_t)category] : "simbolo desconhecido";

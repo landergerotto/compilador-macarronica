@@ -2,7 +2,9 @@
 
 #include <float.h>
 #include <limits.h>
+#include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 typedef struct {
@@ -247,8 +249,6 @@ static void scan_number(Lexer *lexer, SourcePosition start)
 {
     TokenLiteral literal = empty_literal();
     unsigned long long integer = 0U;
-    double real = 0.0;
-    double factor = 0.1;
     int overflow = 0;
     int valid;
     size_t index;
@@ -257,6 +257,11 @@ static void scan_number(Lexer *lexer, SourcePosition start)
         (void)advance_character(lexer, &valid);
     }
     if (!at_end(lexer) && peek_byte(lexer, 0U) == (unsigned char)'.') {
+        size_t length;
+        char *text;
+        char *end;
+        double real;
+
         (void)advance_character(lexer, &valid);
         if (at_end(lexer) || !is_ascii_digit(peek_byte(lexer, 0U))) {
             add_lexical_error(lexer, start, "E-LEX-004", "literal real incompleto; esperado digito apos '.'");
@@ -266,29 +271,32 @@ static void scan_number(Lexer *lexer, SourcePosition start)
         while (!at_end(lexer) && is_ascii_digit(peek_byte(lexer, 0U))) {
             (void)advance_character(lexer, &valid);
         }
-        for (index = start.offset; index < lexer->current; ++index) {
-            unsigned char byte = (unsigned char)lexer->source->buffer[index];
-            if (byte == (unsigned char)'.') {
-                ++index;
-                break;
-            }
-            if (real > DBL_MAX / 10.0) {
-                overflow = 1;
-            } else {
-                real = real * 10.0 + (double)(byte - (unsigned char)'0');
-            }
+        /* SourceFile tambem aceita buffers sem terminador; copie apenas o lexema. */
+        length = lexer->current - start.offset;
+        if (length == (size_t)-1 || (text = (char *)malloc(length + 1U)) == NULL) {
+            lexer->failed = 1;
+            return;
         }
-        for (; index < lexer->current; ++index) {
-            real += (double)((unsigned char)lexer->source->buffer[index] - (unsigned char)'0') * factor;
-            factor *= 0.1;
+        memcpy(text, lexer->source->buffer + start.offset, length);
+        text[length] = '\0';
+        real = strtod(text, &end);
+        if (end != text + length) {
+            /* A gramatica ja validou os caracteres; uma falha aqui e interna. */
+            free(text);
+            lexer->failed = 1;
+            return;
         }
-        if (overflow) {
+        if (!isfinite(real)) {
             add_lexical_error(lexer, start, "E-LEX-006", "literal real fora do intervalo representavel");
             (void)emit_token(lexer, TOKEN_INVALID, start, literal);
         } else {
-            literal.real = real;
+            /* Converter direto para float evita arredondar duas vezes: decimal ->
+             * double -> float pode alterar um valor proximo de um empate. Valores
+             * acima de FLT_MAX ficam em double para o diagnostico semantico. */
+            literal.real = real > (double)FLT_MAX ? real : (double)strtof(text, NULL);
             (void)emit_token(lexer, TOKEN_LITERAL_REAL, start, literal);
         }
+        free(text);
         return;
     }
 
@@ -456,6 +464,7 @@ static void scan_token(Lexer *lexer)
     case '!': (void)advance_character(lexer, &valid); (void)emit_token(lexer, TOKEN_DIFFERENT, start, empty_literal()); break;
     case ';': (void)advance_character(lexer, &valid); (void)emit_token(lexer, TOKEN_SEMICOLON, start, empty_literal()); break;
     case ',': (void)advance_character(lexer, &valid); (void)emit_token(lexer, TOKEN_COMMA, start, empty_literal()); break;
+    case '.': (void)advance_character(lexer, &valid); (void)emit_token(lexer, TOKEN_DOT, start, empty_literal()); break;
     case '@': (void)advance_character(lexer, &valid); (void)emit_token(lexer, TOKEN_AT, start, empty_literal()); break;
     case '(': (void)advance_character(lexer, &valid); (void)emit_token(lexer, TOKEN_LEFT_PAREN, start, empty_literal()); break;
     case ')': (void)advance_character(lexer, &valid); (void)emit_token(lexer, TOKEN_RIGHT_PAREN, start, empty_literal()); break;

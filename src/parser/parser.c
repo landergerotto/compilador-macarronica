@@ -340,7 +340,38 @@ static AstNode *parse_primary(Parser *parser)
     return NULL;
 }
 
-static AstNode *parse_high(Parser *parser)
+/* Cada ponto acrescenta um no: a.b.c agrupa como (a.b).c. */
+static AstNode *parse_field_suffixes(Parser *parser, AstNode *base)
+{
+    size_t field_depth = 0U;
+    if (base == NULL) return NULL;
+    while (check(parser, TOKEN_DOT)) {
+        const Token *dot = advance(parser);
+        const Token *field;
+        AstNode *node;
+        if (parser->expression_depth + field_depth >= PARSER_MAX_EXPRESSION_DEPTH) {
+            syntax_error(parser, dot, "E-SIN-009",
+                         "profundidade maxima de 512 niveis de expressao excedida");
+            ast_node_destroy(base);
+            return NULL;
+        }
+        ++field_depth;
+        field = expect(parser, TOKEN_IDENTIFIER, "esperado nome do campo apos '.'");
+        if (field == NULL) { ast_node_destroy(base); return NULL; }
+        node = new_node(parser, AST_FIELD_EXPR, span_from(base->span.start, field->span.end));
+        if (node == NULL) { ast_node_destroy(base); return NULL; }
+        node->as.field_expr.base = base;
+        node->as.field_expr.field_name = copy_token_text(parser, field);
+        node->as.field_expr.field_span = field->span;
+        if (node->as.field_expr.field_name == NULL) {
+            ast_node_destroy(node); out_of_memory(parser); return NULL;
+        }
+        base = node;
+    }
+    return base;
+}
+
+static AstNode *parse_high_base(Parser *parser)
 {
     const Token *operator_token;
     AstNode *operand;
@@ -360,6 +391,11 @@ static AstNode *parse_high(Parser *parser)
     node->as.unary_expr.operator_span = operator_token->span;
     node->as.unary_expr.operand = operand;
     return node;
+}
+
+static AstNode *parse_high(Parser *parser)
+{
+    return parse_field_suffixes(parser, parse_high_base(parser));
 }
 
 static AstNode *parse_unary(Parser *parser)
@@ -606,7 +642,8 @@ static AstNode *parse_destination(Parser *parser)
     AstNode *index;
     if (name == NULL) return NULL;
     base = make_identifier(parser, name);
-    if (base == NULL || !match(parser, TOKEN_LEFT_BRACE)) return base;
+    if (base == NULL) return NULL;
+    if (!match(parser, TOKEN_LEFT_BRACE)) return parse_field_suffixes(parser, base);
     index = parse_expression(parser);
     if (index == NULL) { ast_node_destroy(base); return NULL; }
     (void)expect(parser, TOKEN_RIGHT_BRACE, "esperado '}' apos indice do destino");
@@ -615,7 +652,7 @@ static AstNode *parse_destination(Parser *parser)
     if (node == NULL) { ast_node_destroy(base); ast_node_destroy(index); return NULL; }
     node->as.index_expr.base = base;
     node->as.index_expr.index = index;
-    return node;
+    return parse_field_suffixes(parser, node);
 }
 
 static AstNode *parse_assignment_no_semicolon(Parser *parser)

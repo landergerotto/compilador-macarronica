@@ -1,9 +1,12 @@
 # Gramática operacional da Macaronica
 
-**Versão:** 0.1.0  
+**Versão:** 0.2.0 (contrato do PjBL 3)
+
 **Notação:** EBNF; `{ X }` na metalinguagem significa repetição e `[ X ]` significa opcionalidade. Terminais aparecem entre aspas. As chaves e colchetes da linguagem aparecem como terminais `"{"`, `"}"`, `"["` e `"]"`.
 
 Esta é a gramática implementável derivada das regras oficiais e das decisões explícitas em `decisoes.md`. Quando a fonte não determinou uma regra, a produção abaixo é uma decisão de projeto, não uma afirmação sobre o PDF.
+
+As extensões do PjBL 3 incluem acesso a campos e funções intrínsecas de E/S, além da assinatura restrita de `principal`. Este documento especifica o comportamento esperado; o estado implementado e verificado deve ser consultado no README e nos resultados de testes.
 
 ## 1. Léxico
 
@@ -21,6 +24,7 @@ Esta é a gramática implementável derivada das regras oficiais e das decisões
 | Comparadores | `<`, `>`, `==`, `!` | Fonte; `!` significa diferente |
 | Aritméticos | `+`, `-`, `*`, `/`, `//`, `^` | Fonte |
 | Pontuação | `;`, `,`, `@`, `(`, `)`, `[`, `]`, `{`, `}` | Fonte/estruturas oficiais |
+| Acesso a campo | `.` | Extensão do projeto, D-013 |
 | Literais | `LIT_INTEIRA`, `LIT_REAL`, `LIT_PALAVRA` | Decisão D-004 |
 | Nomes e controle | `IDENT`, `EOF`, `INVALIDO` | Necessários à implementação |
 
@@ -39,7 +43,7 @@ ESCAPE        = "\\\\" | "\\\"" | "\\n" | "\\r" | "\\t"
 ESPACO        = " " | "\t" | "\r" | "\n"
 ```
 
-`CARACTERE_SEGURO` é qualquer caractere UTF-8 válido, exceto aspas, barra invertida, CR ou LF. Espaços são descartados após atualizar linha e coluna. Não existe sinal dentro do token numérico: `-12` é `-` seguido de `LIT_INTEIRA`.
+`CARACTERE_SEGURO` é qualquer caractere UTF-8 válido, exceto aspas, barra invertida, CR ou LF. Espaços são descartados após atualizar linha e coluna. Não existe sinal dentro do token numérico: `-12` é `-` seguido de `LIT_INTEIRA`. Os tipos e limites semânticos dos números seguem D-021: `inteira` tem 32 bits e o literal real tem precisão `flut` binary32. A magnitude `2147483648` só é admitida como literal diretamente negado para formar `-2147483648`.
 
 Ao construir a AST, `LIT_PALAVRA` produz `AST_LITERAL_EXPR` com `AST_LITERAL_STRING` e o conteúdo já decodificado conforme `ESCAPE`. O nó preserva o `SourceSpan` de toda a grafia original, incluindo as aspas. A decodificação ocorre uma única vez no pipeline.
 
@@ -51,7 +55,9 @@ Ao construir a AST, `LIT_PALAVRA` produz `AST_LITERAL_EXPR` com `AST_LITERAL_STR
 - escape textual desconhecido;
 - sequência UTF-8 inválida;
 - número real incompleto, como `12.`;
-- literal inteiro acima de `LLONG_MAX` ou literal real cuja conversão ultrapassa `DBL_MAX`.
+- literal inteiro acima de `LLONG_MAX` ou literal real cuja conversão ultrapassa `DBL_MAX`, limites do armazenamento temporário do lexer.
+
+Mesmo quando a conversão léxica cabe no armazenamento temporário, a semântica rejeita valores que excedam a faixa da linguagem de D-021. Não ocorre truncamento silencioso no codegen.
 
 ## 2. Unidade de compilação
 
@@ -95,9 +101,12 @@ declaracao_campo    = tipo_valor, IDENT, ";" ;
 Restrições semânticas:
 
 - `vazio` não declara variável, vetor, campo ou parâmetro;
-- tamanho de vetor é maior que zero;
+- tamanho de vetor está entre 1 e `2147483647`;
 - nomes de campos são únicos dentro do registro;
 - duplicata no mesmo escopo é erro.
+- tipos de registro são nominais; ciclos de campos por valor, diretos ou indiretos, são proibidos.
+
+Variáveis locais e globais têm os valores iniciais definidos em D-022: zero numérico, `FAL`, texto vazio e inicialização recursiva de agregados. Todos os locais são inicializados uma vez na entrada da função.
 
 ## 4. Funções
 
@@ -105,8 +114,8 @@ Restrições semânticas:
 declaracao_funcao = "outrafuncao", tipo_retorno, IDENT,
                     "(", [ parametros ], ")", "@", bloco ;
 
-declaracao_principal = tipo_retorno, "principal",
-                       "(", [ parametros ], ")", "@", bloco ;
+declaracao_principal = ( "inteira" | "vazio" ), "principal",
+                       "(", ")", "@", bloco ;
 
 parametros = parametro, { ",", parametro } ;
 parametro  = tipo_valor, IDENT ;
@@ -115,6 +124,8 @@ bloco = "[", { comando }, "]" ;
 ```
 
 `func` não participa desta gramática porque a fonte o lista como reservada, mas usa `outrafuncao` na estrutura oficial. Ao encontrar `func`, o parser deve sugerir `outrafuncao` ou a forma especial de `principal`.
+
+A restrição de `principal` é uma decisão de projeto do PjBL 3 (D-015); se o parser aceitar a forma mais ampla para recuperação, a semântica deve rejeitar parâmetros e outros retornos. A IR expõe `i32 @zl_principal()`. Retorno inteiro fornece o status do processo; principal vazia fornece zero.
 
 ## 5. Comandos
 
@@ -133,16 +144,14 @@ atribuicao = atribuicao_sem_ponto_virgula, ";" ;
 
 atribuicao_sem_ponto_virgula = destino, "receba", expressao ;
 
-destino = IDENT
-        | acesso_vetor
-        ;
+destino = ( IDENT | acesso_vetor ), { ".", IDENT } ;
 
 chamada_comando = chamada, ";" ;
 
 retorno = "respost", [ expressao ], ";" ;
 ```
 
-Somente chamada com retorno `vazio` pode ser usada como `chamada_comando`. `respost` com ou sem expressão é validado conforme o tipo da função, pela decisão D-008.
+Somente chamada com retorno `vazio` pode ser usada como `chamada_comando`. `respost` com ou sem expressão é validado conforme o tipo da função, pela decisão D-008, e termina imediatamente sua execução. Um acesso a campo só pode ser destino quando a base também pode receber atribuição. Um campo de resultado temporário de função pode ser lido, mas não atribuído.
 
 ## 6. Controle
 
@@ -202,11 +211,8 @@ expr_unaria       = ( "+" | "-" ), expr_unaria
                   | expr_alta
                   ;
 
-expr_alta         = chamada
-                  | acesso_vetor
-                  | raiz
-                  | primaria
-                  ;
+expr_alta         = ( chamada | acesso_vetor | raiz | primaria ),
+                    { ".", IDENT } ;
 
 chamada           = IDENT, "(", [ argumentos ], ")" ;
 argumentos        = expressao, { ",", expressao } ;
@@ -228,7 +234,7 @@ primaria          = IDENT
 
 | Nível | Operadores/formas | Associatividade |
 |---:|---|---|
-| 10 (maior) | chamada `()`, indexação `{}`, `raiz()` | não encadeada nesta versão |
+| 10 (maior) | chamada `()`, indexação `{}`, `raiz()`, campo `.` | campos encadeiam à esquerda; chamada/indexação seguem as formas da EBNF |
 | 9 | unários `+`, `-` | direita |
 | 8 | `^` | direita |
 | 7 | `*`, `/`, `//` | esquerda |
@@ -243,9 +249,7 @@ Comparações encadeadas como `a < b < c` são erro sintático. Pela tabela, `N�
 
 Os operadores lógicos podem se repetir sem limite gramatical. Por exemplo, `a < b E c < d E e < f` associa à esquerda. Em `a < b OU c < d E e < f XOR VER`, primeiro são resolvidas as comparações, depois `E`, depois `XOR` e por último `OU`. Parênteses podem alterar esse agrupamento.
 
-Essa precedência define a forma da AST, não a ordem de execução dos operandos.
-A escolha entre curto-circuito e avaliação ansiosa de `E` e `OU` permanece
-pendente para a futura IR.
+Essa precedência define a forma da AST. A execução segue D-020: operandos e argumentos da esquerda para a direita; `E` só executa a direita se a esquerda for verdadeira e `OU` só a executa se a esquerda for falsa. `XOR` executa ambos. Na atribuição, o endereço do destino é calculado antes do valor atribuído.
 
 ## 8. Regras estáticas de tipos
 
@@ -262,16 +266,37 @@ pendente para a futura IR.
 | `NÃO` | `bool` | `bool` |
 | `E`, `OU`, `XOR` | `bool`, `bool` | `bool` |
 | `nome{indice}` | `nome` é vetor; índice `inteira` | tipo do elemento |
+| `expr.campo` | base é registro e campo existe | tipo declarado do campo |
 | `nome(args)` | argumentos compativeis com a assinatura conforme D-012 | retorno declarado |
 
 Atribuicao, argumento e retorno aceitam tipos identicos ou promocao `inteira -> flut`, `inteira -> duplocarpado` e `flut -> duplocarpado`. Conversoes inversas e casts explicitos nao sao aceitos. Operadores mantem as regras da tabela, sem promocao de operandos. Nao ha concatenacao de `palavra`. `vazio` nao e tipo de valor.
 
 Um identificador que nomeia um vetor não é, isoladamente, `lvalue` nem `rvalue`. O vetor completo não pode ser lido, copiado, atribuído, passado como argumento ou retornado. Somente `nome{indice}` denota um elemento com o tipo declarado do vetor e pode funcionar como destino ou valor.
 
+Registros do mesmo tipo nominal podem ser copiados, passados e retornados por valor. O acesso `expr.campo` tem capacidade de valor quando sua base é valor, e capacidade de destino quando sua base é destino. A ordem textual dos campos determina sua posição no tipo LLVM. `palavra` usa igualdade por conteúdo. As operações numéricas e falhas verificadas em execução seguem D-021 e D-023; `/` de inteiros continua proibida.
+
+### 8.1 Intrínsecas de entrada e saída
+
+As funções abaixo são predeclaradas no namespace global de funções e não podem ser redefinidas. Não acrescentam palavras reservadas ao lexer e usam a produção `chamada` já existente. As regras de compatibilidade de D-012 se aplicam aos argumentos.
+
+| Função | Parâmetros | Retorno |
+|---|---|---|
+| `imprimeInteira` | um `inteira` | `vazio` |
+| `imprimeFlut` | um `flut` | `vazio` |
+| `imprimeDuplocarpado` | um `duplocarpado` | `vazio` |
+| `imprimePalavra` | um `palavra` | `vazio` |
+| `imprimeBool` | um `bool` | `vazio` |
+| `imprimeNl` | nenhum | `vazio` |
+| `leInteira` | nenhum | `inteira` |
+| `leFlut` | nenhum | `flut` |
+| `leDuplocarpado` | nenhum | `duplocarpado` |
+
+A saída não acrescenta separadores. `imprimeNl()` emite a nova linha. Os formatos e erros de leitura seguem D-017. Nomes `zl_*` são símbolos de runtime C/LLVM, mapeados em `decisoes_backend.md`, e não identificadores válidos da fonte Macaronica.
+
 ## 9. Validações semânticas mínimas
 
 1. Pré-coletar os nomes de todos os registros e as assinaturas de todas as funções no escopo global, permitindo referências a registros e funções declarados posteriormente, inclusive recursão.
-2. Exigir exatamente uma `principal`.
+2. Exigir exatamente uma `principal`, sem parâmetros e com retorno `inteira` ou `vazio`.
 3. Rejeitar duplicata no mesmo namespace e escopo.
 4. Exigir declaração anterior ao uso de variável. Globais seguem ordem textual: uma função vê apenas as globais declaradas antes dela, ainda que seu corpo seja analisado posteriormente.
 5. Validar alvo e tipo de cada atribuição.
@@ -282,6 +307,9 @@ Um identificador que nomeia um vetor não é, isoladamente, `lvalue` nem `rvalue
 10. Validar operadores pela tabela da seção 8.
 11. Validar tamanho e índice de vetores; conferir o limite quando a expressão inteira do índice puder ser avaliada estaticamente; rejeitar qualquer uso do vetor inteiro como valor ou destino.
 12. Não criar escopo novo para blocos de controle nesta versão.
+13. Validar acesso a campo e capacidade de destino, impedir ciclos de registros e preservar identidade nominal.
+14. Validar a faixa numérica e o tamanho de vetor conforme D-021, incluindo o caso especial do mínimo inteiro.
+15. Predeclarar e proteger as assinaturas das intrínsecas de E/S de D-017.
 
 ## 10. Limites operacionais
 

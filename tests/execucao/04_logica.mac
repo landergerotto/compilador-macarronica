@@ -1,0 +1,20 @@
+inteira chamadas;
+
+outrafuncao bool marca() @
+[
+    chamadas receba chamadas + 1;
+    respost VER;
+]
+
+inteira principal() @
+[
+    cond (FAL E marca()) edai [ imprimePalavra("erro"); ]
+    cond (VER OU marca()) edai [ imprimePalavra("curto"); ]
+    imprimeNl();
+    cond (VER XOR marca()) edai [ imprimePalavra("erro"); ]
+    casocontrario edai [ imprimePalavra("xor"); ]
+    imprimeNl();
+    imprimeInteira(chamadas);
+    imprimeNl();
+    respost 0;
+]

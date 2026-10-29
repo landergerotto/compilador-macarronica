@@ -7,6 +7,7 @@
 #include "parser/ast.h"
 #include "parser/parser.h"
 #include "semantic/semantic.h"
+#include "ir/codegen_llvm.h"
 
 #include <errno.h>
 #include <stdio.h>
@@ -24,6 +25,76 @@ static void dump_tokens(const TokenBuffer *tokens, const char *path)
     for (index = 0U; index < tokens->count; ++index) {
         token_print(&tokens->items[index], path, stdout);
     }
+}
+
+/*
+ * tmpfile e C99 e apaga seu armazenamento ao fechar. So abrimos a saida real
+ * depois de toda a IR ter sido gerada e descarregada com sucesso. Assim um
+ * erro de fonte ou de codegen preserva ate uma saida preexistente.
+ */
+static CompilerExitCode write_llvm_output(const SourceFile *source,
+                                          const AstNode *program,
+                                          const SemanticResult *semantic,
+                                          DiagnosticBag *diagnostics,
+                                          const char *output_path)
+{
+    FILE *temporary = tmpfile();
+    FILE *output = NULL;
+    FrontendStatus status;
+    CompilerExitCode result = COMPILER_EXIT_IO_ERROR;
+    unsigned char buffer[8192];
+    size_t count;
+    int io_failed = 0;
+    int output_created = 0;
+
+    if (temporary == NULL) {
+        (void)fprintf(stderr, "erro de E/S: nao foi possivel criar temporario para `%s`: %s\n",
+                      output_path, strerror(errno));
+        return COMPILER_EXIT_IO_ERROR;
+    }
+    status = codegen_llvm_emit(source, program, semantic, diagnostics, temporary);
+    if (status != FRONTEND_STATUS_OK) {
+        result = ferror(temporary) ? COMPILER_EXIT_IO_ERROR :
+                 status == FRONTEND_STATUS_SOURCE_ERROR ? COMPILER_EXIT_SOURCE_ERROR :
+                 COMPILER_EXIT_INTERNAL_ERROR;
+        goto cleanup;
+    }
+    if (fflush(temporary) != 0 || fseek(temporary, 0L, SEEK_SET) != 0) {
+        (void)fprintf(stderr, "erro de E/S: nao foi possivel finalizar IR temporaria: %s\n", strerror(errno));
+        goto cleanup;
+    }
+    output = fopen(output_path, "wb");
+    if (output == NULL) {
+        (void)fprintf(stderr, "erro de E/S: nao foi possivel abrir `%s` para escrita: %s\n",
+                      output_path, strerror(errno));
+        goto cleanup;
+    }
+    output_created = 1;
+    while ((count = fread(buffer, 1U, sizeof(buffer), temporary)) != 0U) {
+        if (fwrite(buffer, 1U, count, output) != count) {
+            io_failed = 1;
+            break;
+        }
+    }
+    if (ferror(temporary)) io_failed = 1;
+    if (fclose(output) != 0) io_failed = 1;
+    output = NULL;
+    if (io_failed) {
+        (void)fprintf(stderr, "erro de E/S: falha ao publicar `%s`\n", output_path);
+        goto cleanup;
+    }
+    result = COMPILER_EXIT_SUCCESS;
+
+cleanup:
+    if (output != NULL && fclose(output) != 0) result = COMPILER_EXIT_IO_ERROR;
+    if (fclose(temporary) != 0 && result == COMPILER_EXIT_SUCCESS) {
+        (void)fputs("erro de E/S: falha ao fechar IR temporaria\n", stderr);
+        result = COMPILER_EXIT_IO_ERROR;
+    }
+    if (result != COMPILER_EXIT_SUCCESS && output_created && remove(output_path) != 0) {
+        (void)fprintf(stderr, "erro de E/S: nao foi possivel remover saida incompleta `%s`\n", output_path);
+    }
+    return result;
 }
 
 CompilerExitCode compiler_compile_file(const char *path,
@@ -108,9 +179,16 @@ CompilerExitCode compiler_compile_file(const char *path,
         goto diagnostics_and_cleanup;
     }
 
+    if (options->output_path != NULL) {
+        exit_code = write_llvm_output(&source, program, &semantic, &diagnostics, options->output_path);
+        if (exit_code != COMPILER_EXIT_SUCCESS) goto diagnostics_and_cleanup;
+    }
     exit_code = COMPILER_EXIT_SUCCESS;
     if (!options->dump_tokens && !options->dump_ast && !options->dump_symbols) {
-        (void)printf("%s: arquivo lexica, sintatica e semanticamente valido\n", path);
+        if (options->output_path != NULL)
+            (void)printf("%s: LLVM IR gerada em %s\n", path, options->output_path);
+        else
+            (void)printf("%s: arquivo lexica, sintatica e semanticamente valido\n", path);
     }
     goto cleanup;
 

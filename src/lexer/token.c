@@ -61,7 +61,7 @@ const char *token_kind_name(TokenKind kind)
         "receba", "repete", "durante", "cond", "casocontrario", "principal",
         "respost", "registro", "outrafuncao", "vet", "edai", "func", "raiz",
         "VER", "FAL", "OU", "E", "N\xC3\x83O", "XOR", "+", "-", "*", "/", "//",
-        "^", "<", ">", "==", "!", ";", ",", "@", "(", ")", "[", "]", "{", "}"
+        "^", "<", ">", "==", "!", ";", ",", "@", "(", ")", "[", "]", "{", "}", "."
     };
     size_t count = sizeof(names) / sizeof(names[0]);
     return (int)kind >= 0 && (size_t)kind < count ? names[(size_t)kind] : "<token-desconhecido>";

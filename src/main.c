@@ -3,12 +3,12 @@
 #include <stdio.h>
 #include <string.h>
 
-#define MACARONICA_VERSION "0.1.0"
+#define MACARONICA_VERSION "0.2.0"
 
 static void print_usage(FILE *stream, const char *program_name)
 {
     (void)fprintf(stream,
-                  "Uso: %s [--dump-tokens] [--dump-ast] [--dump-symbols] arquivo.mac\n"
+                  "Uso: %s [--dump-tokens] [--dump-ast] [--dump-symbols] arquivo.mac [-o saida.ll]\n"
                   "     %s --help\n"
                   "     %s --version\n",
                   program_name, program_name, program_name);
@@ -27,7 +27,7 @@ static int has_mac_extension(const char *path)
 
 int main(int argc, char **argv)
 {
-    CompilerOptions options = {0, 0, 0};
+    CompilerOptions options = {0, 0, 0, NULL};
     const char *input_path = NULL;
     const char *program_name = argc > 0 && argv[0] != NULL ? argv[0] : "macaronica";
     int index;
@@ -49,6 +49,14 @@ int main(int argc, char **argv)
             options.dump_ast = 1;
         } else if (strcmp(argument, "--dump-symbols") == 0) {
             options.dump_symbols = 1;
+        } else if (strcmp(argument, "-o") == 0) {
+            if (options.output_path != NULL || index + 1 >= argc ||
+                argv[index + 1][0] == '\0' || argv[index + 1][0] == '-') {
+                (void)fputs("erro: use -o uma unica vez, seguido do caminho de saida\n", stderr);
+                print_usage(stderr, program_name);
+                return COMPILER_EXIT_USAGE_ERROR;
+            }
+            options.output_path = argv[++index];
         } else if (argument[0] == '-') {
             (void)fprintf(stderr, "opcao desconhecida: %s\n", argument);
             print_usage(stderr, program_name);
@@ -69,6 +77,10 @@ int main(int argc, char **argv)
     }
     if (!has_mac_extension(input_path)) {
         (void)fprintf(stderr, "erro: o arquivo deve ter extensao .mac: %s\n", input_path);
+        return COMPILER_EXIT_USAGE_ERROR;
+    }
+    if (options.output_path != NULL && strcmp(input_path, options.output_path) == 0) {
+        (void)fputs("erro: entrada e saida devem ter caminhos diferentes\n", stderr);
         return COMPILER_EXIT_USAGE_ERROR;
     }
     return (int)compiler_compile_file(input_path, &options);

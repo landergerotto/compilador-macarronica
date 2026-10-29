@@ -1,0 +1,25 @@
+registro Endereco @ [ inteira numero; ]
+registro Pessoa @ [ Endereco endereco; palavra nome; ]
+
+outrafuncao Pessoa copia(Pessoa pessoa) @
+[
+    respost pessoa;
+]
+
+inteira principal() @
+[
+    Pessoa p, outra;
+    Pessoa vet{2} pessoas;
+    p.endereco.numero receba 42;
+    p.nome receba "Ana";
+    pessoas{1} receba p;
+    outra receba copia(pessoas{1});
+    imprimePalavra(outra.nome);
+    imprimeNl();
+    imprimeInteira(copia(outra).endereco.numero);
+    imprimeNl();
+    cond (outra.nome == "Ana") edai [ imprimePalavra("igual"); ]
+    casocontrario edai [ imprimePalavra("diferente"); ]
+    imprimeNl();
+    respost 0;
+]

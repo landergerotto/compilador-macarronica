@@ -3,6 +3,7 @@
 set -u
 
 compiler=${1:-build/debug/macaronica}
+test_cc=${2:-${CC:-gcc}}
 test_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 project_root=$(CDPATH= cd -- "$test_root/.." && pwd)
 
@@ -24,10 +25,17 @@ trap 'rm -rf -- "$temporary_dir"' EXIT HUP INT TERM
 passed=0
 failed=0
 
+timeout_command=
+if [ -x /usr/bin/timeout ] && /usr/bin/timeout 1 true >/dev/null 2>&1; then
+    timeout_command=/usr/bin/timeout
+elif command -v timeout >/dev/null 2>&1 && timeout 1 true >/dev/null 2>&1; then
+    timeout_command=timeout
+fi
+
 run_compiler()
 {
-    if command -v timeout >/dev/null 2>&1; then
-        timeout 10 "$compiler" "$@"
+    if [ -n "$timeout_command" ]; then
+        "$timeout_command" 10 "$compiler" "$@"
     else
         "$compiler" "$@"
     fi
@@ -44,6 +52,29 @@ record_failure()
     failed=$((failed + 1))
     printf 'FALHA %s: %s\n' "$1" "$2" >&2
 }
+
+# O teste de arredondamento precisa inspecionar o valor do token do lexer.
+# O executavel fica no diretorio temporario removido pelo trap acima.
+rounding_test="$temporary_dir/real_arredondamento.exe"
+if "$test_cc" -std=c99 -Wall -Wextra -pedantic -DMACARONICA_LEXER_DEBUG=0 \
+    "-I$project_root/src" \
+    "$test_root/lexer/real_arredondamento.c" \
+    "$project_root/src/common/source.c" "$project_root/src/common/diagnostic.c" \
+    "$project_root/src/lexer/token.c" "$project_root/src/lexer/lexer.c" \
+    -lm -o "$rounding_test" >"$temporary_dir/rounding-build.out" 2>"$temporary_dir/rounding-build.err"; then
+    if [ -s "$temporary_dir/rounding-build.err" ]; then
+        sed 's/^/       /' "$temporary_dir/rounding-build.err" >&2
+    fi
+    if "$rounding_test" >"$temporary_dir/rounding.out" 2>"$temporary_dir/rounding.err"; then
+        record_pass 'lexer arredonda literais diretamente para flut'
+    else
+        record_failure 'lexer arredonda literais diretamente para flut' 'teste C falhou'
+        sed 's/^/       /' "$temporary_dir/rounding.err" >&2
+    fi
+else
+    record_failure 'lexer arredonda literais diretamente para flut' 'compilacao do teste C falhou'
+    sed 's/^/       /' "$temporary_dir/rounding-build.err" >&2
+fi
 
 run_source_case()
 {
@@ -84,8 +115,8 @@ run_source_case()
         *) diagnostic_phase=$expected_phase ;;
     esac
 
-    if ! grep -Eq ": ${diagnostic_phase} E-" "$stderr_file"; then
-        record_failure "$relative_path" "nao produziu diagnostico da fase $diagnostic_phase"
+    if ! grep -Eq ":[0-9]+:[0-9]+: ${diagnostic_phase} E-" "$stderr_file"; then
+        record_failure "$relative_path" "nao produziu diagnostico localizado da fase $diagnostic_phase"
         sed 's/^/       /' "$stderr_file" >&2
         return
     fi

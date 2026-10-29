@@ -1,4 +1,6 @@
 /.github
+/.codex
+*.md
 *.o
 *.obj
 *.exe

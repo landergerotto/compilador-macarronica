@@ -1,0 +1,6 @@
+vazio principal() @
+[
+    inteira numero;
+    numero.campo receba 1;
+    respost;
+]

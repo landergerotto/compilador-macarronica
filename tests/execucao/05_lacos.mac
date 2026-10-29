@@ -1,0 +1,21 @@
+inteira principal() @
+[
+    inteira i, soma;
+    repete (i receba 0, i < 5, i receba i + 1) edai
+    [
+        soma receba soma + i;
+    ]
+    i receba 0;
+    durante (i < 3) edai
+    [
+        cond (i == 1) edai
+        [
+            cond (soma > 0) edai [ soma receba soma + 10; ]
+        ]
+        casocontrario edai [ soma receba soma + 1; ]
+        i receba i + 1;
+    ]
+    imprimeInteira(soma);
+    imprimeNl();
+    respost 0;
+]

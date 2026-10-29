@@ -1,0 +1,5 @@
+vazio principal() @
+[
+    inteira vet{2147483648} numeros;
+    respost;
+]

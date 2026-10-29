@@ -1,0 +1,5 @@
+vazio principal() @
+[
+    imprimeInteira(1.5);
+    respost;
+]
