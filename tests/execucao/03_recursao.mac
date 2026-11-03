@@ -16,7 +16,7 @@ outrafuncao inteira fatorial(inteira n) @
 inteira principal() @
 [
     inteira resultado;
-    resultado receba fatorial(5);
+    resultado receba fatorial(7);
     imprimeInteira(resultado);
     imprimeNl();
     imprimeInteira(chamadas);
