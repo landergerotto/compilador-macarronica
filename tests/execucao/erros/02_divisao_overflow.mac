@@ -1,7 +1,7 @@
 inteira principal() @
 [
     inteira menor;
-    menor receba -2147483647 - 1;
+    menor receba -9223372036854775807 - 1;
     imprimeInteira(menor // -1);
     respost 0;
 ]

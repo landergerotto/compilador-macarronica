@@ -1,9 +1,10 @@
 inteira principal() @
 [
-    inteira minimo, maximo;
+    inteira minimo, maximo, cpf;
     flut grande, pequeno;
-    minimo receba -2147483648;
-    maximo receba 2147483647;
+    minimo receba -9223372036854775807 - 1;
+    maximo receba 9223372036854775807;
+    cpf receba 12345678901;
     grande receba 340282300000000000000000000000000000000.0;
     pequeno receba 0.000000000000000000000000000000000000000000001;
     respost 0;

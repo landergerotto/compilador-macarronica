@@ -1,6 +1,6 @@
 vazio principal() @
 [
     inteira numero;
-    numero receba 2147483648;
+    numero receba -9223372036854775809;
     respost;
 ]

@@ -40,7 +40,7 @@ descreve operações tipadas, funções, blocos e transferências de controle.
 Essas representações atendem a fases diferentes.
 
 O padrão de três endereços ajuda a compreender uma instrução como
-`%t.2 = add i32 %t.0, %t.1`: um resultado e dois operandos. O projeto gera
+`%t.2 = add i64 %n.0, %t.1`: um resultado e dois operandos. O projeto gera
 LLVM IR diretamente; não constrói uma segunda IR própria de 3AC.
 
 Um DAG poderia representar compartilhamento de subexpressões comuns.
@@ -57,7 +57,9 @@ emissor textual, sem uma lista própria de operações ou passes de otimização
 
 `emit_function` reserva parâmetros e locais com `alloca` no bloco `entry`.
 As leituras usam `load`, as atribuições usam `store`, e os parâmetros são
-armazenados a partir de `%arg.N`. Os locais começam com os valores padrão
+armazenados a partir do valor `%nome` recebido (o slot é `%nome.addr`).
+Leituras viram `%nome.N`, e cada linha de origem ganha um comentário
+`; linha N`, como pede o enunciado. Os locais começam com os valores padrão
 documentados, uma vez por chamada da função.
 
 Cada resultado `%t.N` é definido uma única vez. Isso satisfaz SSA para os
@@ -123,7 +125,7 @@ altera uma global para tornar essa diferença observável.
 
 | Fonte | Representação/ação LLVM | Motivo |
 |---|---|---|
-| `inteira` | `i32`, operações inteiras e `icmp` | Inteiro assinado de 32 bits |
+| `inteira` | `i64`, operações inteiras e `icmp` | Inteiro assinado de 64 bits (CPFs dos casos do professor não cabem em 32) |
 | `flut` | `float`, operações reais e `fcmp` | Precisão binary32 |
 | `duplocarpado` | `double`, operações reais e `fcmp` | Precisão binary64 |
 | `bool` | `i1` | Resultado lógico |
@@ -233,9 +235,10 @@ podem buscar ponto fixo; o grupo não implementou essas análises no PjBL 3.
 | GEP faz checagem de índice? | Não. O compilador emite comparações e saltos de erro antes de calcular o endereço. |
 | Por que `sitofp` e não `bitcast`? | Precisamos converter o valor numérico, não interpretar os mesmos bits de outro modo. |
 | Por que não usar `fptrunc`? | Reduzir precisão não é uma conversão autorizada pela Macaronica atual. |
-| `/` e `//` podem compartilhar uma instrução? | Não: `/` usa reais e `fdiv`; `//` usa `sdiv i32` e trunca para zero. |
+| `/` e `//` podem compartilhar uma instrução? | Não: `/` usa reais e `fdiv`; `//` usa `sdiv i64` e trunca para zero. |
 | Por que não emitir `nsw`? | Overflow de soma/subtração/multiplicação é modular; `nsw` permitiria pressupor ausência de overflow assinado. |
-| Por que `-2147483648 // -1` tem guarda? | O resultado positivo não cabe em `i32`; executar `sdiv` nesse caso violaria seu contrato. |
+| Por que `-9223372036854775808 // -1` tem guarda? | O resultado positivo não cabe em `i64`; executar `sdiv` nesse caso violaria seu contrato. |
+| Por que `principal` retorna `i32` se `inteira` é `i64`? | É o contrato com o `main` do runtime; o status do processo recebe os 32 bits baixos (`trunc`). |
 | Igualdade de palavra usa `icmp ptr`? | Não. `zl_texto_igual` compara conteúdo; dois endereços distintos podem conter o mesmo texto. |
 | Registro temporário precisa de GEP? | Seu campo pode ser extraído por `extractvalue`; GEP é usado quando temos um endereço de armazenamento. |
 | `lli` emula a placa futura? | Não. Ele executa no hospedeiro atual; a toolchain de placa pertence ao PjBL 4. |

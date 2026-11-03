@@ -162,7 +162,9 @@ while IFS="$(printf '\t')" read -r relative_path expectation phase category; do
 done < "$test_root/manifest.tsv"
 
 run_source_case 'integration/valido_minimo.mac' aceito '-'
-run_source_case 'lexer/invalido_real_truncado.mac' rejeitado lexica
+for source_path in "$test_root"/lexer/invalido_*.mac; do
+    run_source_case "lexer/$(basename -- "$source_path")" rejeitado lexica
+done
 for source_path in "$test_root"/parser/invalido_*.mac; do
     run_source_case "parser/$(basename -- "$source_path")" rejeitado sintatica
 done
@@ -173,6 +175,11 @@ done
 
 for source_path in "$test_root"/semantic/invalido_*.mac; do
     run_source_case "semantic/$(basename -- "$source_path")" rejeitado semantica
+done
+
+# Casos distribuidos pelo professor (extensao .mcn): todos devem ser aceitos.
+for source_path in "$test_root"/professor/*.mcn; do
+    run_source_case "professor/$(basename -- "$source_path")" aceito '-'
 done
 
 precedence_source="$test_root/parser/valido_precedencia_condicao.mac"

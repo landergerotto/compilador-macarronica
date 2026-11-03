@@ -43,7 +43,7 @@ ESCAPE        = "\\\\" | "\\\"" | "\\n" | "\\r" | "\\t"
 ESPACO        = " " | "\t" | "\r" | "\n"
 ```
 
-`CARACTERE_SEGURO` é qualquer caractere UTF-8 válido, exceto aspas, barra invertida, CR ou LF. Espaços são descartados após atualizar linha e coluna. Não existe sinal dentro do token numérico: `-12` é `-` seguido de `LIT_INTEIRA`. Os tipos e limites semânticos dos números seguem D-021: `inteira` tem 32 bits e o literal real tem precisão `flut` binary32. A magnitude `2147483648` só é admitida como literal diretamente negado para formar `-2147483648`.
+`CARACTERE_SEGURO` é qualquer caractere UTF-8 válido, exceto aspas, barra invertida, CR ou LF. Espaços são descartados após atualizar linha e coluna. Não existe sinal dentro do token numérico: `-12` é `-` seguido de `LIT_INTEIRA`. Os tipos e limites semânticos dos números seguem D-021: `inteira` tem 64 bits e o literal real tem precisão `flut` binary32. A magnitude de `LIT_INTEIRA` vai até `9223372036854775807`; o menor valor de `inteira` é escrito por expressão (`-9223372036854775807 - 1`).
 
 Ao construir a AST, `LIT_PALAVRA` produz `AST_LITERAL_EXPR` com `AST_LITERAL_STRING` e o conteúdo já decodificado conforme `ESCAPE`. O nó preserva o `SourceSpan` de toda a grafia original, incluindo as aspas. A decodificação ocorre uma única vez no pipeline.
 

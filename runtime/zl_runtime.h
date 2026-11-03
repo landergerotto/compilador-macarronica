@@ -18,7 +18,7 @@ enum {
 /* A implementacao termina o processo. LLVM declara esta funcao noreturn. */
 void zl_erro_execucao(int32_t codigo, int32_t linha);
 
-void zl_imprime_int(int32_t valor);
+void zl_imprime_int(int64_t valor);
 void zl_imprime_flut(float valor);
 void zl_imprime_duplocarpado(double valor);
 void zl_imprime_texto(const char *valor);
@@ -27,14 +27,14 @@ void zl_imprime_bool(int32_t valor);
 void zl_imprime_nl(void);
 
 /* A linha e um argumento oculto acrescentado pelo gerador. */
-int32_t zl_le_int(int32_t linha);
+int64_t zl_le_int(int32_t linha);
 float zl_le_flut(int32_t linha);
 double zl_le_duplocarpado(int32_t linha);
 
 /* Ponteiro nulo representa a palavra vazia na inicializacao padrao. */
 int32_t zl_texto_igual(const char *esquerda, const char *direita);
 
-int32_t zl_potencia_int(int32_t base, int32_t expoente, int32_t linha);
+int64_t zl_potencia_int(int64_t base, int64_t expoente, int32_t linha);
 float zl_potencia_flut(float base, float expoente, int32_t linha);
 double zl_potencia_duplocarpado(double base, double expoente, int32_t linha);
 float zl_raiz_flut(float valor, int32_t linha);
