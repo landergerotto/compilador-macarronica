@@ -271,3 +271,4 @@ develop -> branch-de-trabalho -> develop -> main
 | [`docs/otimizacoes.md`](docs/otimizacoes.md) | Evidências de SSA, `mem2reg`, `phi`, `-O2` e equivalência. |
 | [`docs/guia-defesa-pjbl3.md`](docs/guia-defesa-pjbl3.md) | Guia de código, conceitos das aulas e perguntas de arguição. |
 | [`docs/diagnosticos.md`](docs/diagnosticos.md) | Catálogo dos códigos de erro léxico, sintático e semântico. |
+| [`docs/plano-pjbl3-4.md`](docs/plano-pjbl3-4.md) | Situação, pendências e cronograma do PjBL 3 e 4 até 17/11. |
