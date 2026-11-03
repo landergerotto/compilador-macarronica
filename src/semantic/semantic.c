@@ -1150,7 +1150,10 @@ static void validate_record_cycles(SemanticAnalyzer *analyzer, SourceSpan span)
     free(color);
 }
 
-/* Lacos nao garantem retorno, pois o corpo pode nao ser executado. */
+/*
+ * `durante` e `repete` nunca contam como retorno garantido: a condicao pode ser
+ * falsa na primeira avaliacao e o corpo executar zero vezes.
+ */
 static int block_always_returns(const AstNode *block);
 
 static int statement_always_returns(const AstNode *node)

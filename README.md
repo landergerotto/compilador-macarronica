@@ -236,6 +236,23 @@ as conversões e o efeito de `mem2reg`/`phi`. Resultados de testes relatados
 referem-se apenas às ferramentas efetivamente executadas, não a uma prova
 formal de correção.
 
+### Apoio de IA nas contribuições da branch `luiz/melhorias`
+
+| Parte do projeto | Em que consistiu o apoio |
+|---|---|
+| [`src/semantic/semantic.c`](src/semantic/semantic.c) — `statement_always_returns` e `block_always_returns` | Identificação de que a verificação anterior apenas contava a existência de um `respost`, e implementação da análise de fluxo de controle que exige retorno em todos os caminhos |
+| [`src/parser/parser.c`](src/parser/parser.c) — limite em cadeias de operadores | Identificação de um estouro de pilha com expressões muito longas e aplicação do limite de profundidade que já existia no projeto |
+| [`src/lexer/token.c`](src/lexer/token.c), [`src/lexer/token.h`](src/lexer/token.h) e [`src/compiler.c`](src/compiler.c) — `token_print` | Correção do prefixo fixo que aparecia no lugar do caminho do arquivo em `--dump-tokens` |
+| [`tests/run_tests.sh`](tests/run_tests.sh) e [`tests/semantic/invalido_retorno_parcial.mac`](tests/semantic/invalido_retorno_parcial.mac) | Casos de regressão correspondentes às correções acima |
+| Revisão de código | Leitura da base em busca de defeitos, com verificação manual de cada achado antes de qualquer alteração |
+
+Esta tabela cobre o apoio de IA nas contribuições da branch `luiz/melhorias`.
+Cada integrante complementa a lista com o próprio uso nas demais partes do
+projeto.
+
+Todo o código entregue foi revisado pelos integrantes, que respondem por
+qualquer trecho da implementação.
+
 ## Fluxo de trabalho
 
 ```text
