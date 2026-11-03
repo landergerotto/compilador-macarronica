@@ -128,6 +128,70 @@ static void emit_guard(Codegen *gen, LlvmValue bad, int code, size_t line)
 }
 
 static LlvmValue emit_expression(Codegen *gen, const AstNode *node);
+static void emit_statement(Codegen *gen, const AstNode *node);
+
+/* O destino e calculado antes do RHS. Este helper nunca carrega o valor. */
+static LlvmValue emit_address(Codegen *gen, const AstNode *node)
+{
+    LlvmValue address = value_empty(node->semantic.type_id);
+    const Symbol *symbol;
+    const Type *type;
+    if (gen->status != FRONTEND_STATUS_OK) return address;
+    switch (node->kind) {
+    case AST_IDENTIFIER_EXPR:
+        symbol = symbol_table_get(&gen->semantic->symbols, node->semantic.symbol_id);
+        if (symbol == NULL) {
+            fail(gen, node, "E-IR-002", "identificador sem simbolo resolvido");
+            return address;
+        }
+        symbol_address(gen, symbol, address.operand, sizeof(address.operand));
+        return address;
+    case AST_INDEX_EXPR: {
+        LlvmValue base = emit_address(gen, node->as.index_expr.base);
+        LlvmValue index = emit_expression(gen, node->as.index_expr.index);
+        LlvmValue low = new_temporary(gen, TYPE_ID_BOOL);
+        LlvmValue high = new_temporary(gen, TYPE_ID_BOOL);
+        LlvmValue bad = new_temporary(gen, TYPE_ID_BOOL);
+        type = type_table_get(&gen->semantic->types,
+                              node->as.index_expr.base->semantic.type_id);
+        if (type == NULL || type->kind != TYPE_ARRAY || index.type_id != TYPE_ID_INTEGER) {
+            fail(gen, node, "E-IR-002", "indice sem tipo de vetor valido");
+            return address;
+        }
+        write_ir(gen, "  %s = icmp slt i32 %s, 0\n", low.operand, index.operand);
+        write_ir(gen, "  %s = icmp sge i32 %s, %lld\n", high.operand,
+                 index.operand, type->array_size);
+        write_ir(gen, "  %s = or i1 %s, %s\n", bad.operand, low.operand, high.operand);
+        emit_guard(gen, bad, 3, node->span.start.line);
+        address = new_temporary(gen, node->semantic.type_id);
+        write_ir(gen, "  %s = getelementptr ", address.operand);
+        emit_type(gen, type->id);
+        write_ir(gen, ", ptr %s, i32 0, i32 %s\n", base.operand, index.operand);
+        return address;
+    }
+    case AST_FIELD_EXPR:
+        type = type_table_get(&gen->semantic->types,
+                              node->as.field_expr.base->semantic.type_id);
+        symbol = symbol_table_get(&gen->semantic->symbols, node->semantic.symbol_id);
+        if (type == NULL || type->kind != TYPE_RECORD || symbol == NULL ||
+            (node->as.field_expr.base->semantic.flags & AST_SEMANTIC_LVALUE) == 0U) {
+            fail(gen, node, "E-IR-002", "campo sem base gravavel ou simbolo valido");
+            return address;
+        }
+        {
+            LlvmValue base = emit_address(gen, node->as.field_expr.base);
+            address = new_temporary(gen, node->semantic.type_id);
+            write_ir(gen, "  %s = getelementptr ", address.operand);
+            emit_type(gen, type->id);
+            write_ir(gen, ", ptr %s, i32 0, i32 %zu\n", base.operand,
+                     symbol->field_index);
+        }
+        return address;
+    default:
+        fail(gen, node, "E-IR-001", "destino de atribuicao nao suportado");
+        return address;
+    }
+}
 
 static LlvmValue convert_value(Codegen *gen, LlvmValue value, size_t target,
                                const AstNode *node)
@@ -225,8 +289,31 @@ static LlvmValue emit_binary(Codegen *gen, const AstNode *node)
 {
     AstOperator op = node->as.binary_expr.operator_kind;
     LlvmValue left = emit_expression(gen, node->as.binary_expr.left);
-    LlvmValue right = emit_expression(gen, node->as.binary_expr.right);
-    LlvmValue result = new_temporary(gen, node->semantic.type_id);
+    LlvmValue right;
+    LlvmValue result;
+    if (op == AST_OP_LOGICAL_AND || op == AST_OP_LOGICAL_OR) {
+        size_t label = gen->label++;
+        char left_block[64], right_block[64];
+        (void)snprintf(left_block, sizeof(left_block), "%s", gen->current_block);
+        if (op == AST_OP_LOGICAL_AND)
+            write_ir(gen, "  br i1 %s, label %%logic.rhs.%zu, label %%logic.end.%zu\n",
+                     left.operand, label, label);
+        else
+            write_ir(gen, "  br i1 %s, label %%logic.end.%zu, label %%logic.rhs.%zu\n",
+                     left.operand, label, label);
+        emit_label(gen, "logic.rhs", label);
+        right = emit_expression(gen, node->as.binary_expr.right);
+        (void)snprintf(right_block, sizeof(right_block), "%s", gen->current_block);
+        write_ir(gen, "  br label %%logic.end.%zu\n", label);
+        emit_label(gen, "logic.end", label);
+        result = new_temporary(gen, TYPE_ID_BOOL);
+        write_ir(gen, "  %s = phi i1 [ %s, %%%s ], [ %s, %%%s ]\n",
+                 result.operand, op == AST_OP_LOGICAL_AND ? "false" : "true",
+                 left_block, right.operand, right_block);
+        return result;
+    }
+    right = emit_expression(gen, node->as.binary_expr.right);
+    result = new_temporary(gen, node->semantic.type_id);
     int real = left.type_id == TYPE_ID_FLOAT || left.type_id == TYPE_ID_DOUBLE;
     const char *instruction = NULL;
     if (left.type_id == TYPE_ID_WORD) {
@@ -353,11 +440,45 @@ static LlvmValue emit_expression(Codegen *gen, const AstNode *node)
             fail(gen, node, "E-IR-002", "identificador sem simbolo resolvido");
             break;
         }
+        if (type_table_get(&gen->semantic->types, node->semantic.type_id)->kind == TYPE_ARRAY) {
+            fail(gen, node, "E-IR-001", "vetor inteiro nao e valor da linguagem");
+            break;
+        }
         symbol_address(gen, symbol, address, sizeof(address));
         value = new_temporary(gen, node->semantic.type_id);
         write_ir(gen, "  %s = load ", value.operand);
         emit_type(gen, value.type_id);
         write_ir(gen, ", ptr %s\n", address);
+        break;
+    }
+    case AST_INDEX_EXPR: {
+        LlvmValue address = emit_address(gen, node);
+        value = new_temporary(gen, node->semantic.type_id);
+        write_ir(gen, "  %s = load ", value.operand);
+        emit_type(gen, value.type_id);
+        write_ir(gen, ", ptr %s\n", address.operand);
+        break;
+    }
+    case AST_FIELD_EXPR: {
+        const Symbol *field = symbol_table_get(&gen->semantic->symbols,
+                                                node->semantic.symbol_id);
+        if (field == NULL) {
+            fail(gen, node, "E-IR-002", "campo sem simbolo resolvido");
+            break;
+        }
+        if ((node->semantic.flags & AST_SEMANTIC_LVALUE) != 0U) {
+            LlvmValue address = emit_address(gen, node);
+            value = new_temporary(gen, node->semantic.type_id);
+            write_ir(gen, "  %s = load ", value.operand);
+            emit_type(gen, value.type_id);
+            write_ir(gen, ", ptr %s\n", address.operand);
+        } else {
+            LlvmValue base = emit_expression(gen, node->as.field_expr.base);
+            value = new_temporary(gen, node->semantic.type_id);
+            write_ir(gen, "  %s = extractvalue ", value.operand);
+            emit_typed_value(gen, base);
+            write_ir(gen, ", %zu\n", field->field_index);
+        }
         break;
     }
     case AST_CALL_EXPR: return emit_call(gen, node);
@@ -366,6 +487,81 @@ static LlvmValue emit_expression(Codegen *gen, const AstNode *node)
     default: fail(gen, node, "E-IR-001", "expressao ainda nao implementada no gerador"); break;
     }
     return value;
+}
+
+static void emit_if(Codegen *gen, const AstNode *node)
+{
+    size_t index;
+    size_t end_label = gen->label++;
+    int reaches_end = node->as.if_stmt.else_body == NULL;
+    for (index = 0U; index < node->as.if_stmt.branches.count; ++index) {
+        const AstIfBranch *branch = &node->as.if_stmt.branches.items[index];
+        size_t then_label = gen->label++;
+        size_t next_label = gen->label++;
+        LlvmValue condition = emit_expression(gen, branch->condition);
+        write_ir(gen, "  br i1 %s, label %%if.then.%zu, label %%if.next.%zu\n",
+                 condition.operand, then_label, next_label);
+        emit_label(gen, "if.then", then_label);
+        emit_statement(gen, branch->body);
+        if (!gen->terminated) {
+            write_ir(gen, "  br label %%if.end.%zu\n", end_label);
+            reaches_end = 1;
+        }
+        emit_label(gen, "if.next", next_label);
+    }
+    if (node->as.if_stmt.else_body != NULL) {
+        emit_statement(gen, node->as.if_stmt.else_body);
+        if (!gen->terminated) {
+            write_ir(gen, "  br label %%if.end.%zu\n", end_label);
+            reaches_end = 1;
+        }
+    } else write_ir(gen, "  br label %%if.end.%zu\n", end_label);
+    if (reaches_end) emit_label(gen, "if.end", end_label);
+    else gen->terminated = 1;
+}
+
+static void emit_while(Codegen *gen, const AstNode *node)
+{
+    size_t condition_label = gen->label++;
+    size_t body_label = gen->label++;
+    size_t end_label = gen->label++;
+    write_ir(gen, "  br label %%loop.cond.%zu\n", condition_label);
+    emit_label(gen, "loop.cond", condition_label);
+    {
+        LlvmValue condition = emit_expression(gen, node->as.while_stmt.condition);
+        write_ir(gen, "  br i1 %s, label %%loop.body.%zu, label %%loop.end.%zu\n",
+                 condition.operand, body_label, end_label);
+    }
+    emit_label(gen, "loop.body", body_label);
+    emit_statement(gen, node->as.while_stmt.body);
+    if (!gen->terminated) write_ir(gen, "  br label %%loop.cond.%zu\n", condition_label);
+    emit_label(gen, "loop.end", end_label);
+}
+
+static void emit_for(Codegen *gen, const AstNode *node)
+{
+    size_t condition_label = gen->label++;
+    size_t body_label = gen->label++;
+    size_t iteration_label = gen->label++;
+    size_t end_label = gen->label++;
+    emit_statement(gen, node->as.for_stmt.initializer);
+    if (gen->terminated) return;
+    write_ir(gen, "  br label %%for.cond.%zu\n", condition_label);
+    emit_label(gen, "for.cond", condition_label);
+    {
+        LlvmValue condition = emit_expression(gen, node->as.for_stmt.condition);
+        write_ir(gen, "  br i1 %s, label %%for.body.%zu, label %%for.end.%zu\n",
+                 condition.operand, body_label, end_label);
+    }
+    emit_label(gen, "for.body", body_label);
+    emit_statement(gen, node->as.for_stmt.body);
+    if (!gen->terminated) {
+        write_ir(gen, "  br label %%for.inc.%zu\n", iteration_label);
+        emit_label(gen, "for.inc", iteration_label);
+        emit_statement(gen, node->as.for_stmt.iteration);
+        if (!gen->terminated) write_ir(gen, "  br label %%for.cond.%zu\n", condition_label);
+    }
+    emit_label(gen, "for.end", end_label);
 }
 
 static void emit_statement(Codegen *gen, const AstNode *node)
@@ -378,24 +574,22 @@ static void emit_statement(Codegen *gen, const AstNode *node)
         for (index = 0U; index < node->as.block.statements.count; ++index)
             emit_statement(gen, node->as.block.statements.items[index]);
         break;
-    case AST_VAR_DECL: break; /* Armazenamento e inicializacao ja ocorreram no entry. */
+    case AST_VAR_DECL:
+    case AST_VECTOR_DECL: break; /* Armazenamento e inicializacao ja ocorreram no entry. */
     case AST_ASSIGNMENT: {
         const AstNode *target = node->as.assignment.target;
-        const Symbol *symbol = symbol_table_get(&gen->semantic->symbols, target->semantic.symbol_id);
-        char address[64];
+        LlvmValue address = emit_address(gen, target);
         LlvmValue value;
-        if (target->kind != AST_IDENTIFIER_EXPR || symbol == NULL) {
-            fail(gen, target, "E-IR-001", "destino ainda nao implementado no gerador");
-            return;
-        }
-        symbol_address(gen, symbol, address, sizeof(address));
         value = emit_expression(gen, node->as.assignment.value);
         value = convert_value(gen, value, target->semantic.type_id, node);
         write_ir(gen, "  store ");
         emit_typed_value(gen, value);
-        write_ir(gen, ", ptr %s\n", address);
+        write_ir(gen, ", ptr %s\n", address.operand);
         break;
     }
+    case AST_IF_STMT: emit_if(gen, node); break;
+    case AST_WHILE_STMT: emit_while(gen, node); break;
+    case AST_FOR_STMT: emit_for(gen, node); break;
     case AST_EXPR_STMT: (void)emit_expression(gen, node->as.expr_stmt.expression); break;
     case AST_RETURN_STMT:
         if (node->as.return_stmt.value != NULL) {
@@ -423,7 +617,8 @@ static void visit_tree(Codegen *gen, const AstNode *node, int emit_strings)
         visit_tree(gen, node->as.function_decl.body, emit_strings);
         break;
     case AST_STRUCT_DECL: break;
-    case AST_VAR_DECL: break;
+    case AST_VAR_DECL:
+    case AST_VECTOR_DECL: break;
     case AST_BLOCK: list = &node->as.block.statements; break;
     case AST_ASSIGNMENT:
         visit_tree(gen, node->as.assignment.target, emit_strings);
@@ -432,12 +627,31 @@ static void visit_tree(Codegen *gen, const AstNode *node, int emit_strings)
     case AST_RETURN_STMT: visit_tree(gen, node->as.return_stmt.value, emit_strings); break;
     case AST_EXPR_STMT: visit_tree(gen, node->as.expr_stmt.expression, emit_strings); break;
     case AST_CALL_EXPR: list = &node->as.call_expr.arguments; break;
-    case AST_BINARY_EXPR:
-        if (node->as.binary_expr.operator_kind == AST_OP_LOGICAL_AND ||
-            node->as.binary_expr.operator_kind == AST_OP_LOGICAL_OR) {
-            fail(gen, node, "E-IR-001", "curto-circuito pendente da etapa de CFG");
-            break;
+    case AST_IF_STMT:
+        for (index = 0U; index < node->as.if_stmt.branches.count; ++index) {
+            visit_tree(gen, node->as.if_stmt.branches.items[index].condition, emit_strings);
+            visit_tree(gen, node->as.if_stmt.branches.items[index].body, emit_strings);
         }
+        visit_tree(gen, node->as.if_stmt.else_body, emit_strings);
+        break;
+    case AST_WHILE_STMT:
+        visit_tree(gen, node->as.while_stmt.condition, emit_strings);
+        visit_tree(gen, node->as.while_stmt.body, emit_strings);
+        break;
+    case AST_FOR_STMT:
+        visit_tree(gen, node->as.for_stmt.initializer, emit_strings);
+        visit_tree(gen, node->as.for_stmt.condition, emit_strings);
+        visit_tree(gen, node->as.for_stmt.iteration, emit_strings);
+        visit_tree(gen, node->as.for_stmt.body, emit_strings);
+        break;
+    case AST_INDEX_EXPR:
+        visit_tree(gen, node->as.index_expr.base, emit_strings);
+        visit_tree(gen, node->as.index_expr.index, emit_strings);
+        break;
+    case AST_FIELD_EXPR:
+        visit_tree(gen, node->as.field_expr.base, emit_strings);
+        break;
+    case AST_BINARY_EXPR:
         visit_tree(gen, node->as.binary_expr.left, emit_strings);
         visit_tree(gen, node->as.binary_expr.right, emit_strings);
         break;

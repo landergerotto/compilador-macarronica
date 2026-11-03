@@ -38,7 +38,7 @@ DEBUG_TARGET = build/debug/macaronica$(EXEEXT)
 RELEASE_TARGET = build/release/macaronica$(EXEEXT)
 SANITIZE_TARGET = build/sanitize/macaronica$(EXEEXT)
 
-.PHONY: all debug release test sanitize clean
+.PHONY: all debug release test test-frontend sanitize clean
 
 all: $(DEBUG_TARGET)
 
@@ -49,8 +49,11 @@ release: $(RELEASE_TARGET)
 test: $(DEBUG_TARGET)
 	"$(BASH)" tests/run_tests.sh "$(DEBUG_TARGET)" "$(CC)"
 
+test-frontend: $(DEBUG_TARGET)
+	"$(BASH)" tests/run_tests.sh "$(DEBUG_TARGET)" "$(CC)" frontend
+
 sanitize: $(SANITIZE_TARGET)
-	$(BASH) tests/run_tests.sh "$(SANITIZE_TARGET)"
+	"$(BASH)" tests/run_tests.sh "$(SANITIZE_TARGET)" "$(CC)"
 
 $(DEBUG_TARGET): $(SOURCES) $(HEADERS)
 	@mkdir -p $(@D)

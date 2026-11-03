@@ -9,7 +9,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#if FLT_RADIX != 2 || FLT_MANT_DIG != 24 || DBL_MANT_DIG != 53
+#if FLT_RADIX != 2 || FLT_MANT_DIG != 24 || FLT_MAX_EXP != 128 || \
+    DBL_MANT_DIG != 53 || DBL_MAX_EXP != 1024
 #error "O runtime requer float binary32 e double binary64"
 #endif
 
@@ -68,6 +69,7 @@ static void le_token(char *buffer, size_t capacidade, int32_t linha)
 {
     size_t tamanho = 0U;
     int longo = 0;
+    int invalido = 0;
     int caractere;
     do {
         caractere = fgetc(stdin);
@@ -76,6 +78,9 @@ static void le_token(char *buffer, size_t capacidade, int32_t linha)
         zl_erro_execucao(ZL_ERRO_ENTRADA, linha);
     }
     do {
+        /* NUL nao termina um token de stdin. Rejeita o token completo para
+         * strto* nao aceitar somente o prefixo anterior a esse byte. */
+        if (caractere == '\0') invalido = 1;
         if (tamanho + 1U < capacidade) {
             buffer[tamanho++] = (char)caractere;
         } else {
@@ -84,7 +89,7 @@ static void le_token(char *buffer, size_t capacidade, int32_t linha)
         caractere = fgetc(stdin);
     } while (caractere != EOF && !isspace((unsigned char)caractere));
     buffer[tamanho] = '\0';
-    if (longo || ferror(stdin)) {
+    if (longo || invalido || ferror(stdin)) {
         zl_erro_execucao(ZL_ERRO_ENTRADA, linha);
     }
 }
@@ -218,7 +223,9 @@ double zl_raiz_duplocarpado(double valor, int32_t linha)
     return sqrt(valor);
 }
 
+#ifndef ZL_RUNTIME_NO_MAIN
 int main(void)
 {
     return (int)zl_principal();
 }
+#endif

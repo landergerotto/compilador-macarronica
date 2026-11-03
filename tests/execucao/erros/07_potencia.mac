@@ -1,0 +1,5 @@
+inteira principal() @
+[
+    imprimeFlut(-2.0 ^ 0.5);
+    respost 0;
+]
