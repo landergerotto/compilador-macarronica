@@ -1,0 +1,31 @@
+inteira global;
+
+outrafuncao flut paraFlut(inteira valor) @
+[
+    respost valor;
+]
+
+outrafuncao duplocarpado paraDuplo(flut valor) @
+[
+    respost valor;
+]
+
+inteira principal() @
+[
+    inteira local;
+    flut arredondado;
+    duplocarpado ampliado;
+    global receba 16777217;
+    local receba 3;
+    arredondado receba global;
+    ampliado receba local;
+    imprimeFlut(arredondado);
+    imprimeNl();
+    imprimeDuplocarpado(ampliado);
+    imprimeNl();
+    imprimeFlut(paraFlut(local));
+    imprimeNl();
+    imprimeDuplocarpado(paraDuplo(1.5));
+    imprimeNl();
+    respost 0;
+]

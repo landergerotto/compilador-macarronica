@@ -1,10 +1,14 @@
 # Decisões de projeto da linguagem Macaronica
 
-**Versão da especificação:** 0.1.0  
-**Estado:** decisões provisórias para a primeira implementação do front-end  
+**Versão da especificação:** 0.2.0 (PjBL 3)
+
+**Estado:** contrato de linguagem para implementação e validação do PjBL 3
+
 **Fonte normativa:** seção 4.2 (Macaronica) e seção 4.3 do enunciado `Zolang_Macaronica.pdf`
 
 Este documento separa o que é dito pela fonte do que foi decidido pelo projeto. Os exemplos em C da calculadora orientam apenas a organização do programa; eles não definem tokens, sintaxe ou semântica da Macaronica. Vocabulário apresentado para outras linguagens no mesmo material não faz parte desta especificação.
+
+As revisões para o PjBL 3 foram decididas pelo projeto para cumprir o escopo solicitado em 29/10/2026. São extensões ou restrições locais, sem atribuição ao PDF. O PDF citado não está presente no repositório; as regras oficiais abaixo são as já transcritas pela documentação do projeto. Este documento descreve o contrato a implementar, sem afirmar que todas as regras já passaram por validação executável. O mapeamento para LLVM e a ABI do runtime são detalhados em `decisoes_backend.md`.
 
 ## D-001 - Arquivo de entrada e codificação
 
@@ -39,7 +43,7 @@ Este documento separa o que é dito pela fonte do que foi decidido pelo projeto.
 
    O valor de um literal `palavra` chega à AST já decodificado: por exemplo, os dois caracteres `\` e `n` da origem tornam-se uma quebra de linha no valor semântico. O nó da AST preserva seu `SourceSpan`, apontando para toda a grafia original do literal, incluindo as aspas, para que diagnósticos continuem referenciando o arquivo-fonte corretamente.
 
-   Não há literal próprio de `duplocarpado` em 0.1.0. Um valor desse tipo pode vir de parâmetro, variável ou chamada de retorno `duplocarpado`. Promocoes seguem D-012; acrescentar sufixo exige nova decisao. Literais também precisam caber na representação usada pelo compilador: inteiros acima de `LLONG_MAX` e reais cuja conversão ultrapassa `DBL_MAX` são rejeitados.
+   Não há literal próprio de `duplocarpado`. Um valor desse tipo pode vir de promoção, parâmetro, variável ou chamada de retorno `duplocarpado`. Promoções seguem D-012; acrescentar sufixo exige nova decisão. A faixa semântica dos literais numéricos passa a seguir D-021; o armazenamento temporário mais largo do compilador não aumenta a faixa da linguagem.
 4. **Impacto:** o lexer emite tokens distintos para inteiro, real, palavra e booleano. Texto sem fechamento, escape desconhecido e literal numérico fora da faixa são erros léxicos. Lexer e parser devem definir um único responsável pela decodificação, sem decodificar duas vezes; ao construir `AST_LITERAL_EXPR` com `AST_LITERAL_STRING`, o conteúdo armazenado é o valor decodificado e o `SourceSpan` é o da origem. A IR futura recebe o valor decodificado e pode reutilizar o `SourceSpan` para diagnóstico. A ausencia de literal de duplocarpado e preservada; promocoes seguem D-012.
 
 ## D-005 - Comentários e conflito com `//`
@@ -61,21 +65,21 @@ Este documento separa o que é dito pela fonte do que foi decidido pelo projeto.
 1. **Regra oficial:** a fonte define declaração, mas não define formalmente a chamada; o exemplo usa `quadrado(numero)`.
 2. **Lacuna:** a seção 4.3 manda documentar a forma natural.
 3. **Decisão do projeto:** chamadas usam `nome(argumentos)`, com zero ou mais expressões separadas por vírgula. Uma chamada que retorna valor pode compor uma expressão. Uma chamada de função `vazio` pode ser um comando terminado por `;` e não pode compor expressão de valor.
-4. **Impacto:** o parser reconhece chamada após identificador. A semântica verifica existência, quantidade e tipo exato dos argumentos e o uso do retorno. A IR futura usa nó de chamada com lista ordenada de argumentos.
+4. **Impacto:** o parser reconhece chamada após identificador. A semântica verifica existência, quantidade e compatibilidade dos argumentos conforme D-012 e o uso do retorno. A IR usa nó de chamada com lista ordenada de argumentos e emite as promoções necessárias.
 
 ## D-008 - Retorno e `vazio`
 
 1. **Regra oficial:** `vazio` existe apenas como tipo de retorno; a forma mostrada é `respost valor;`. A fonte não define o retorno de função `vazio`.
 2. **Lacuna:** omitir `respost` ou usar `respost;` são alternativas igualmente plausíveis.
-3. **Decisão do projeto:** em função `vazio`, `respost;` é permitido e opcional, enquanto `respost expressão;` é proibido. Em função não vazia, todo caminho possível de execução deve chegar a `respost expressão;`, e a expressão deve ter exatamente o tipo declarado. Uma cadeia `cond` só garante retorno quando possui um `casocontrario` final e todos os ramos garantem retorno. `durante` e `repete` não garantem retorno, pois podem executar zero vezes.
-4. **Impacto:** o parser aceita `respost` com ou sem expressão. A semântica usa o tipo da função corrente, rejeita retorno fora de função e produz `E-SEM-032` quando uma função não vazia deixa algum caminho sem valor. A IR futura terá `RETURN` com operando opcional e receberá corpos cuja cobertura de retorno já foi validada.
+3. **Decisão do projeto:** em função `vazio`, `respost;` é permitido e opcional, enquanto `respost expressão;` é proibido. Em função não vazia, todo caminho possível de execução deve chegar a `respost expressão;`, e a expressão deve ter tipo compatível com o retorno declarado conforme D-012. Uma cadeia `cond` só garante retorno quando possui um `casocontrario` final e todos os ramos garantem retorno. `durante` e `repete` não garantem retorno, pois podem executar zero vezes. `respost` termina imediatamente a função corrente; nenhum comando posterior do mesmo caminho é executado. A regra de entrada `principal` é especificada em D-015.
+4. **Impacto:** o parser aceita `respost` com ou sem expressão. A semântica usa o tipo da função corrente, rejeita retorno fora de função e produz `E-SEM-032` quando uma função não vazia deixa algum caminho sem valor. A IR emite `ret` com o valor convertido quando necessário; o final alcançável de uma função comum `vazio` emite `ret void`.
 
 ## D-009 - Condições de controle
 
 1. **Regra oficial:** a fonte restringe condição a `VAR COMPARADOR VAR`, `VAR COMPARADOR NUM` ou `NUM COMPARADOR NUM`.
 2. **Lacuna:** booleanos e operadores lógicos existem, mas a fonte não os integra à regra de condição.
 3. **Decisão do projeto:** fica aprovada uma extensão explícita sobre a regra oficial restritiva. As condições de `cond`, `casocontrario cond`, `durante` e `repete` aceitam sintaticamente qualquer `expressao`, sem importar construções de outras linguagens. A análise semântica exige que o resultado da expressão seja `bool`. Assim, são válidos literais e variáveis booleanas, `NÃO`, chamadas com retorno `bool`, comparações e combinações com quantos operadores `E`, `OU` e `XOR` forem necessários. A ordem de avaliação sintática segue a precedência e a associatividade de D-010.
-4. **Impacto:** o lexer não ganha tokens. O parser reutiliza a produção `expressao` em todas as estruturas de controle. A semântica verifica a expressão normalmente e rejeita a condição quando seu tipo final não é `bool`. A AST mantém a expressão completa como condição, e a IR futura recebe um valor booleano já validado. Esta decisão define o agrupamento sintático, mas ainda não escolhe entre curto-circuito e avaliação ansiosa para `E` e `OU`; isso deve ser resolvido antes do lowering para IR.
+4. **Impacto:** o lexer não ganha tokens. O parser reutiliza a produção `expressao` em todas as estruturas de controle. A semântica verifica a expressão normalmente e rejeita a condição quando seu tipo final não é `bool`. A AST mantém a expressão completa como condição, e a IR recebe um valor booleano já validado. A ordem de avaliação e o curto-circuito são definidos em D-020.
 
 ## D-010 - Precedência e associatividade
 
@@ -107,14 +111,14 @@ Este documento separa o que é dito pela fonte do que foi decidido pelo projeto.
 1. **Regra oficial:** não há regra de conversão entre `inteira`, `flut` e `duplocarpado`.
 2. **Lacuna:** não se sabe se atribuições, argumentos, retornos ou operadores promovem tipos.
 3. **Decisao do projeto (revisada com aprovacao do usuario):** atribuicoes, argumentos e retornos aceitam tipos identicos e as promocoes `inteira -> flut`, `inteira -> duplocarpado` e `flut -> duplocarpado`. Conversoes inversas, casts explicitos e promocao entre operandos de operadores nao sao aceitos. Vetores e registros nao ganham conversao estrutural; elementos numericos de vetores seguem a regra escalar. Inteiros grandes podem sofrer arredondamento ao serem convertidos para ponto flutuante.
-4. **Impacto:** a expressao mantem seu tipo original na AST. O destino da atribuicao, o parametro da assinatura ou o retorno declarado fornece o tipo esperado. O futuro gerador LLVM devera comparar esses tipos e emitir `sitofp` para inteiro -> ponto flutuante e `fpext` para flut -> duplocarpado. Inteira -> duplocarpado deve ser direta, sem passar por flut. Este repositorio ainda implementa somente o front-end; nao ha execucao nem geracao LLVM para validar conversoes em tempo de execucao.
+4. **Impacto:** a expressão mantém seu tipo original na AST. O destino da atribuição, o parâmetro da assinatura ou o retorno declarado fornece o tipo esperado. O gerador LLVM compara esses tipos e emite `sitofp` para inteiro -> ponto flutuante e `fpext` para flut -> duplocarpado. Inteira -> duplocarpado é direta, sem passar por flut. As conversões são explícitas nas instruções LLVM; isso não cria sintaxe de cast na fonte. Testes de execução devem verificar atribuição, argumento e retorno, inclusive arredondamento de `inteira -> flut`.
 
 ## D-013 - Registros
 
 1. **Regra oficial:** `registro nome @ [ tipo nome; ... ]` declara um registro, mas não há sintaxe de acesso a campo.
 2. **Lacuna:** a fonte não explica como instanciar ou acessar campos.
-3. **Decisão do projeto:** o nome do registro passa a ser um tipo válido em declarações, parâmetros e retornos. Campos devem ter nomes únicos e tipo não `vazio`. Como não há operador de acesso oficial, acesso a campos não é aceito em 0.1.0.
-4. **Impacto:** lexer não ganha pontuação de campo. Parser mantém declaração de registro e tipos nomeados. Semântica possui namespace de tipos e valida os campos, mas qualquer tentativa de acesso produz erro léxico/sintático.
+3. **Decisão do projeto (revisada no PjBL 3):** o nome do registro é um tipo nominal válido em declarações, parâmetros e retornos. Dois registros declarados com nomes diferentes são tipos diferentes, mesmo com campos iguais. Campos têm nomes únicos e tipo não `vazio`; sua ordem é a ordem textual da declaração. O projeto acrescenta o acesso `expressao.campo`, permitindo cadeias como `pessoa.endereco.numero` e acesso sobre elemento de vetor ou resultado de função. O campo pode ser lido quando a base é valor e atribuído quando a base é destino atribuível. Registros podem ser copiados, passados e retornados por valor, sem conversão estrutural. Ciclos de campos por valor, diretos ou indiretos, são proibidos porque produziriam objetos sem tamanho finito. Vetores de registros são permitidos; campos de vetor continuam fora da gramática.
+4. **Impacto:** o lexer ganha o token `.` como extensão do projeto. O parser cria um nó de acesso com base e nome do campo; a semântica resolve o símbolo e tipo do campo, propaga a capacidade de destino da base e rejeita ciclos de registros. A IR usa o tipo nominal e a posição textual do campo para GEP ou extração de valor. Testes incluem campos aninhados, cópia, parâmetros/retornos, campo inexistente, base não registro e ciclos.
 
 ## D-014 - Escopos, declarações e funções
 
@@ -127,8 +131,8 @@ Este documento separa o que é dito pela fonte do que foi decidido pelo projeto.
 
 1. **Regra oficial:** a fonte distingue função não principal e `tipo principal(...) @ [ ... ]`.
 2. **Lacuna:** não define quantidade, ordem ou possibilidade de chamar `principal`.
-3. **Decisão do projeto:** cada arquivo contém exatamente uma função `principal`. Registros, funções, declarações globais e `principal` podem aparecer em qualquer ordem sintática; essa liberdade não antecipa a visibilidade de variáveis globais, que continua obedecendo à ordem textual definida em D-014. `principal` não pode ser chamada como função comum. Seu tipo de retorno segue `tipo_retorno` e respeita D-008.
-4. **Impacto:** ausência ou duplicidade de `principal` é erro semântico global. A IR futura marca esse símbolo como ponto de entrada.
+3. **Decisão do projeto (revisada no PjBL 3):** cada arquivo contém exatamente uma função `principal`, sem parâmetros e com retorno `inteira` ou `vazio`. Essa restrição de assinatura é uma decisão do projeto para definir a entrada executável, sem inventar argumentos do programa. Registros, funções, declarações globais e `principal` podem aparecer em qualquer ordem sintática; a visibilidade de globais segue D-014. `principal` não pode ser chamada como função comum. D-008 continua valendo: `inteira principal()` deve retornar valor em todos os caminhos, enquanto `vazio principal()` pode chegar ao fim ou usar `respost;`.
+4. **Impacto:** a semântica rejeita ausência, duplicidade, parâmetros e retorno incompatível de `principal`. O gerador normaliza ambas as formas para `define i32 @zl_principal()`: na forma inteira, `respost expressão;` fornece o resultado; na forma vazia, retorno ou fim fornece zero. O `main` do runtime recebe esse resultado e o devolve como status do processo, sujeito à representação de status do sistema hospedeiro. Testes conferem assinatura, retorno e status.
 
 ## D-016 - Comandos de repetição
 
@@ -141,8 +145,22 @@ Este documento separa o que é dito pela fonte do que foi decidido pelo projeto.
 
 1. **Regra oficial:** a seção de Macaronica não define tokens nem estruturas de leitura ou impressão, embora a seção geral de testes peça uso de entrada/saída para a linguagem escolhida.
 2. **Lacuna:** o requisito de teste e a especificação de Macaronica são incompatíveis.
-3. **Decisão do projeto:** não importar comandos de outra linguagem. Entrada/saída ficam sem sintaxe e são rejeitadas em 0.1.0 até confirmação do professor ou nova decisão do grupo.
-4. **Impacto:** lexer e parser não reconhecem comandos de I/O. O risco de não cumprir literalmente um caso obrigatório deve ser levado ao professor e registrado na entrega.
+3. **Decisão do projeto (revisada no PjBL 3):** a solicitação de implementar E/S via runtime é atendida por funções intrínsecas predeclaradas com a sintaxe de chamada comum. São uma extensão explícita da Macaronica do projeto e não palavras reservadas do PDF. As assinaturas são:
+
+   | Nome na fonte | Parâmetros | Retorno |
+   |---|---|---|
+   | `imprimeInteira` | `inteira valor` | `vazio` |
+   | `imprimeFlut` | `flut valor` | `vazio` |
+   | `imprimeDuplocarpado` | `duplocarpado valor` | `vazio` |
+   | `imprimePalavra` | `palavra valor` | `vazio` |
+   | `imprimeBool` | `bool valor` | `vazio` |
+   | `imprimeNl` | nenhum | `vazio` |
+   | `leInteira` | nenhum | `inteira` |
+   | `leFlut` | nenhum | `flut` |
+   | `leDuplocarpado` | nenhum | `duplocarpado` |
+
+   Essas assinaturas seguem as conversões de D-012 e ocupam o namespace global de funções; uma função do usuário não pode redefini-las. A saída não acrescenta espaço nem nova linha automaticamente: `imprimeNl()` emite uma nova linha. Inteiros usam decimal assinado, `flut` nove dígitos significativos, `duplocarpado` dezessete, `bool` usa `VER`/`FAL` e `palavra` usa UTF-8. As leituras consomem um número de `stdin`, com espaços separando entradas e ponto decimal para reais; EOF, formato inválido ou valor fora da faixa terminam com erro de execução. Não há leitura de texto nesta versão.
+4. **Impacto:** lexer e parser reutilizam identificadores e chamadas. A semântica predeclara as intrínsecas e verifica seus argumentos/retorno; a IR as identifica pelos símbolos, sem depender de chamadas variádicas C. O runtime POSIX separado implementa a ABI `zl_*`; esses nomes com sublinhado pertencem à IR/C e não à fonte Macaronica. A correspondência exata de símbolos é documentada em `decisoes_backend.md`. Testes usam entrada conhecida e comparam a saída integral.
 
 ## D-018 - Diagnósticos e recuperação
 
@@ -158,10 +176,55 @@ Este documento separa o que é dito pela fonte do que foi decidido pelo projeto.
 3. **Decisão do projeto:** na Macaronica 0.1.0, a instrumentação temporária dos três analisadores fica habilitada por padrão. Cada `fprintf` temporário de depuração no código C deve ter, na própria linha, o comentário exato `// debug - remover`. As mensagens vão para `stderr` e começam com `[debug]`. Essa convenção pertence somente à implementação C: ela não cria comentários, tokens ou qualquer outra sintaxe em arquivos `.mac`.
 4. **Impacto:** lexer, parser e semântica emitem rastros durante o pipeline normal; testes que validam a saída funcional devem separar ou filtrar `stderr`. Uma configuração de release pode desabilitar a instrumentação, sem mudar o resultado da análise. A remoção posterior pode localizar com segurança todas as linhas pela marca exata. AST e IR não representam esses logs.
 
+## D-020 - Ordem de avaliação e lógica no PjBL 3
+
+1. **Regra oficial:** há operadores lógicos e chamadas, mas a fonte não fixa a ordem de execução nem o curto-circuito.
+2. **Lacuna:** chamadas podem ter efeitos, como alterar uma global ou imprimir; avaliar um operando desnecessário pode até causar erro de execução.
+3. **Decisão do projeto:** operandos e argumentos são avaliados da esquerda para a direita. `E` usa curto-circuito: se o operando esquerdo for `FAL`, o direito não é executado. `OU` usa curto-circuito: se o esquerdo for `VER`, o direito não é executado. `XOR` executa ambos os operandos, da esquerda para a direita, e resulta em verdadeiro se forem diferentes. Na atribuição, o endereço do destino (incluindo índice e verificações) é calculado antes do valor da direita. Cada expressão é avaliada uma única vez, exceto quando o controle do programa a executa novamente em um laço.
+4. **Impacto:** a AST conserva a precedência de D-010. A IR de `E`/`OU` usa blocos e saltos condicionais, com um valor booleano reunido na saída; `XOR` pode usar `xor i1`. Testes com chamadas e efeitos observáveis devem comprovar a ordem e a omissão do segundo operando. Nenhuma nova regra de parser é necessária.
+
+## D-021 - Representação numérica e limites no PjBL 3
+
+1. **Regra oficial:** os nomes dos tipos existem, sem larguras ou limites fixados pela fonte.
+2. **Lacuna:** aceitar um valor no front-end e truncá-lo silenciosamente no backend tornaria o significado dependente da implementação.
+3. **Decisão do projeto:** `inteira` é um inteiro assinado de 32 bits (`-2147483648` a `2147483647`), `flut` é IEEE 754 binary32 e `duplocarpado` é IEEE 754 binary64. Um literal real tem tipo `flut`, arredondado para binary32; seu armazenamento temporário em `double` no compilador não muda esse tipo. Literais reais maiores que `FLT_MAX` são rejeitados; valores pequenos podem arredondar para subnormal ou zero. A magnitude decimal `2147483648` só é aceita como operando literal direto do menos unário que representa `-2147483648`; seu uso positivo ou em outra expressão é rejeitado. Tamanhos de vetor ficam entre 1 e `2147483647`, com índice `inteira` e origem zero.
+
+   Soma, subtração, multiplicação, menos unário e potência inteira usam aritmética modular de 32 bits. Em particular, negar `-2147483648` produz o mesmo valor. `//` continua truncando em direção a zero e verifica as exceções de D-023. Aritmética real segue IEEE 754, sem pressupor identidades algébricas de números reais; o backend não usa `fast-math`. Comparações `<`, `>` e `==` são falsas se algum operando for NaN; `!` é verdadeira nesse caso. `palavra` é comparada pelo conteúdo UTF-8, não pelo endereço de armazenamento.
+4. **Impacto:** o front-end valida faixas e evita aceitar tipos de tamanho infinito ou índice incompatível. LLVM usa `i32`, `float` e `double`; operações inteiras modulares não recebem `nsw`/`nuw`. O runtime usa tipos C de largura fixa e evita overflow assinado de C. Testes incluem limites, arredondamento e valores negativos. Portabilidade não implica reduzir `duplocarpado` para `float` em uma placa futura.
+
+## D-022 - Inicialização de variáveis
+
+1. **Regra oficial:** há declarações sem inicializador, mas a fonte não define o valor inicial.
+2. **Lacuna:** a semântica atual aceita leitura antes de atribuição e não possui análise de atribuição definitiva.
+3. **Decisão do projeto:** globais e locais começam com zero para tipos numéricos, `FAL` para `bool`, palavra vazia para `palavra` e inicialização recursiva desses valores em vetores e registros. Locais são inicializados uma vez por chamada da função, antes dos comandos; executar novamente uma declaração dentro de laço não reinicializa a variável. Parâmetros recebem seus argumentos. As regras de declaração antes do uso e escopos de D-014 continuam valendo.
+4. **Impacto:** o codegen reserva todos os locais no bloco de entrada e inicializa seus armazenamentos antes do corpo, inclusive os declarados em ramos. A representação interna de palavra vazia pode ser uma constante ou ponteiro nulo tratado como texto vazio pelo runtime; o programa observa o mesmo valor. Testes devem ler valores iniciais escalares e agregados e verificar persistência de locais entre iterações.
+
+## D-023 - Falhas de execução e operações numéricas
+
+1. **Regra oficial:** a fonte não fixa a reação a divisão por zero, domínio inválido ou índice dinâmico fora dos limites.
+2. **Lacuna:** operações LLVM podem produzir comportamento indefinido ou `poison` quando seus pré-requisitos são violados.
+3. **Decisão do projeto:** o programa termina com status não zero e diagnóstico em `stderr`, incluindo ao menos a linha da fonte, nos seguintes casos: divisor zero de `/` ou `//` (incluindo `-0.0`), `-2147483648 // -1`, índice fora de `0..N-1`, argumento negativo de `raiz`, expoente negativo de potência inteira e falha de leitura de D-017. A raiz real e a potência real usam operações da precisão declarada; para potência, domínio inválido detectado pela biblioteca matemática também é erro. `0 ^ 0` vale 1. Potência inteira pode ser calculada por exponenciação por quadrados em aritmética modular. Estes testes de valor podem ocorrer estaticamente, quando comprováveis, ou no runtime; uma entrada sem erro estático não pode escapar das verificações dinâmicas necessárias.
+4. **Impacto:** o codegen emite guardas antes de divisão/GEP ou chama auxiliares verificados do runtime. O runtime fornece uma rotina de falha `zl_*` sem retorno e funções matemáticas quando necessárias, com ABI em `decisoes_backend.md`. Testes negativos de execução conferem status e linha; testes positivos conferem truncamento de `//` com sinais diferentes e raiz/potência nas duas precisões. O runtime fica separado e o módulo LLVM não fixa placa, triple ou datalayout.
+
+## D-024 - Intrínsecas de GPIO para o alvo ESP32
+
+1. **Regra oficial:** a sintaxe Macaronica não define GPIO, temporização de placa nem nomes de pinos. Os tipos e as regras de expressão dos PjBL 1 e 3 continuam válidos.
+2. **Lacuna:** um programa-fonte precisa controlar GPIO físico no ESP32 DevKit V1 sem incorporar chamadas C ou símbolos `zl_*` à gramática da Macaronica.
+3. **Decisão do projeto para o PjBL 4:** acrescentam-se funções intrínsecas predeclaradas, com a sintaxe de chamada existente e sem novos tokens. Seus nomes seguem D-003, que não admite sublinhado em identificadores da fonte:
+
+   | Nome na fonte | Parâmetros | Retorno | Significado |
+   |---|---|---|---|
+   | `pinoModo` | `inteira pino, inteira modo` | `vazio` | configura 0 = entrada, 1 = saída, 2 = entrada com pull-up, 3 = entrada com pull-down |
+   | `pinoEscreve` | `inteira pino, bool nivel` | `vazio` | `VER` = nível alto de 3,3 V; `FAL` = nível baixo |
+   | `pinoLe` | `inteira pino` | `bool` | lê nível lógico; alto resulta em `VER` |
+   | `espera` | `inteira milissegundos` | `vazio` | solicita atraso em ticks do FreeRTOS, arredondando duração positiva para cima; a precisão física depende do escalonador |
+
+   `espera(0)` não introduz espera. Duração negativa é erro de execução. Os quatro nomes ocupam o namespace global de funções e não podem ser redefinidos. Essas intrínsecas somente podem ser chamadas na compilação com `--alvo=esp32`; o alvo padrão de PC/POSIX continua com as regras do PjBL 3. Uma chamada sem o alvo ESP32 é erro de validação de alvo com localização da chamada, após a análise semântica comum, mesmo quando a assinatura é válida. Valores de pino e modo são conferidos pelo runtime ESP-IDF. Pinos ligados à flash (GPIO6–11) são proibidos; GPIO34–39 não podem ser saídas e não oferecem os modos com pull interno. `pinoEscreve` exige configuração prévia como saída; `pinoLe`, configuração prévia como entrada. A escolha de pino para um circuito concreto depende do pinout da placa e é registrada em `placa.md`, sem presumir LED onboard.
+4. **Impacto:** lexer e parser reutilizam identificadores, chamadas e tipos existentes. A semântica predeclara as quatro assinaturas; a validação do alvo rejeita seu uso fora de ESP32 com diagnóstico específico. O gerador C seleciona a intrínseca por identidade de símbolo. O backend LLVM do PC mantém o contrato do PjBL 3; a validação de alvo impede chamadas GPIO nessa rota. A ABI C da placa usa `zl_pino_modo`, `zl_pino_escreve`, `zl_pino_le` e `zl_espera_ms`, com linha da fonte oculta acrescentada pelo gerador para erros de execução. O argumento `bool` de escrita é expandido para inteiro 0/1 na fronteira C; a leitura retorna inteiro 0/1 e o gerador o converte para `bool`. Testes verificam assinaturas, proibição no alvo padrão, modos e erros de GPIO no alvo ESP32. Esta extensão pertence ao projeto, não ao enunciado original da Macaronica.
+
 ## Questões pendentes para uma versão posterior
 
-- Avaliar promocao entre operandos de operadores, fora do escopo de D-012.
+- Avaliar promoção entre operandos de operadores, fora do escopo de D-012.
 - Definir literal próprio de `duplocarpado`.
-- Definir acesso a campos de registro.
-- Obter do professor uma sintaxe de entrada/saída para Macaronica ou uma dispensa explícita do caso de teste.
-- Definir a ordem de avaliação dos operandos e se `E` e `OU` usam curto-circuito antes de implementar a IR.
+- Definir leitura de texto e outras operações de texto, se necessárias.
+- Medir na ferramenta ESP-IDF escolhida o custo e a precisão efetiva de `duplocarpado` como binary64 no ESP32 clássico, preservando a semântica documentada no PjBL 3.

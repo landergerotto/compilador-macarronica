@@ -189,6 +189,10 @@ void ast_node_destroy(AstNode *node)
         ast_node_destroy(node->as.index_expr.base);
         ast_node_destroy(node->as.index_expr.index);
         break;
+    case AST_FIELD_EXPR:
+        ast_node_destroy(node->as.field_expr.base);
+        free(node->as.field_expr.field_name);
+        break;
     case AST_BINARY_EXPR:
         ast_node_destroy(node->as.binary_expr.left);
         ast_node_destroy(node->as.binary_expr.right);
@@ -214,7 +218,7 @@ const char *ast_kind_name(AstKind kind)
         "Program", "FunctionDecl", "StructDecl", "VarDecl", "VectorDecl",
         "Block", "Assignment", "IfStmt", "WhileStmt", "ForStmt",
         "ReturnStmt", "ExprStmt", "CallExpr", "IndexExpr", "BinaryExpr",
-        "UnaryExpr", "LiteralExpr", "IdentifierExpr"
+        "UnaryExpr", "LiteralExpr", "IdentifierExpr", "FieldExpr"
     };
     if ((size_t)kind >= sizeof(names) / sizeof(names[0])) {
         return "Unknown";
@@ -564,6 +568,15 @@ static void dump_node(const AstNode *node, FILE *stream, size_t depth)
     case AST_INDEX_EXPR:
         dump_child(stream, "base", node->as.index_expr.base, depth + 1U);
         dump_child(stream, "index", node->as.index_expr.index, depth + 1U);
+        break;
+    case AST_FIELD_EXPR:
+        dump_child(stream, "base", node->as.field_expr.base, depth + 1U);
+        dump_indent(stream, depth + 1U);
+        fputs("field=", stream);
+        dump_quoted(stream, node->as.field_expr.field_name);
+        fputs(" span=", stream);
+        dump_span(stream, node->as.field_expr.field_span);
+        fputc('\n', stream);
         break;
     case AST_BINARY_EXPR:
         dump_indent(stream, depth + 1U);

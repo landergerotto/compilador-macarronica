@@ -36,7 +36,8 @@ typedef enum {
     AST_BINARY_EXPR,
     AST_UNARY_EXPR,
     AST_LITERAL_EXPR,
-    AST_IDENTIFIER_EXPR
+    AST_IDENTIFIER_EXPR,
+    AST_FIELD_EXPR
 } AstKind;
 
 /* Qual operacao um no de expressao representa. */
@@ -198,6 +199,11 @@ struct AstNode {
             AstNode *base;
             AstNode *index;
         } index_expr;
+        struct {
+            AstNode *base;
+            char *field_name;
+            SourceSpan field_span;
+        } field_expr;
         struct {
             AstOperator operator_kind;
             SourceSpan operator_span;

@@ -1,0 +1,6 @@
+vazio principal() @
+[
+    inteira numero;
+    numero receba -2147483649;
+    respost;
+]

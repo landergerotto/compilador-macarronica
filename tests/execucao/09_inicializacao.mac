@@ -1,0 +1,25 @@
+registro Dados @ [ inteira numero; palavra texto; bool ligado; ]
+inteira global;
+
+inteira principal() @
+[
+    Dados dados;
+    inteira vet{2} valores;
+    inteira i;
+    imprimeInteira(global);
+    imprimeInteira(dados.numero);
+    imprimeInteira(valores{1});
+    imprimeBool(dados.ligado);
+    cond (dados.texto == "") edai [ imprimePalavra("vazio"); ]
+    imprimeNl();
+    i receba 0;
+    durante (i < 3) edai
+    [
+        inteira acumulado;
+        acumulado receba acumulado + 1;
+        i receba i + 1;
+        cond (i == 3) edai [ imprimeInteira(acumulado); ]
+    ]
+    imprimeNl();
+    respost 0;
+]

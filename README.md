@@ -1,18 +1,23 @@
 # Compilador Macaronica
 
-Este projeto implementa, em C99, o front-end da linguagem Macaronica. O
+Este projeto implementa, em C99, o compilador da linguagem Macaronica. O
 executável recebe um arquivo `.mac`, produz os tokens, monta a árvore sintática
 abstrata (AST) e faz a análise semântica. Nessa última fase, confere nomes,
 tipos, escopos, chamadas e retornos.
 
-A versão atual valida o código-fonte. Geração de IR, otimizações e código para
-a placa ainda não foram implementadas.
+A etapa PjBL 3 gera LLVM IR textual diretamente da AST semanticamente
+validada, com runtime C separado. O pipeline é fonte → lexer → parser/AST →
+semântica → LLVM IR → ferramentas LLVM → execução no hospedeiro. A rota da
+ESP32 (PjBL 4, parte D) reutiliza a AST validada para gerar C99 e firmware
+ESP-IDF. MLIR, DSL vetorial e benchmarks ficam fora desta etapa.
 
 ## Requisitos
 
 - GCC
 - GNU Make ou `mingw32-make`
 - Bash para executar os testes
+- LLVM 15 ou superior com ponteiros opacos: `clang`, `llvm-as`, `llvm-link`,
+  `opt` e `lli`, todos da mesma versão principal
 
 A compilação usa C99 com `-Wall -Wextra -pedantic`.
 
@@ -68,6 +73,7 @@ make debug
 | `make debug` | `mingw32-make debug` | Compila a versão de debug |
 | `make release` | `mingw32-make release` | Compila a versão otimizada, sem os rastros de debug |
 | `make test` | `mingw32-make test` | Compila e executa os testes |
+| `make test-frontend` | `mingw32-make test-frontend` | Executa somente a regressão do front-end, sem exigir LLVM |
 | `make sanitize` | `mingw32-make sanitize` | Executa os testes com AddressSanitizer e UndefinedBehaviorSanitizer, quando disponíveis |
 | `make clean` | `mingw32-make clean` | Remove o diretório `build/` |
 
@@ -82,7 +88,7 @@ ou `mingw32-make -B debug`.
 ## Linha de comando
 
 ```text
-macaronica [--dump-tokens] [--dump-ast] [--dump-symbols] arquivo.mac
+macaronica [--dump-tokens] [--dump-ast] [--dump-symbols] arquivo.mac [-o saida.ll]
 macaronica --help
 macaronica --version
 ```
@@ -92,6 +98,7 @@ macaronica --version
 | `--dump-tokens` | Tokens produzidos pelo lexer |
 | `--dump-ast` | AST produzida pelo parser |
 | `--dump-symbols` | Tipos, escopos e símbolos produzidos pela análise semântica |
+| `-o saida.ll` | Gera LLVM IR depois de aceitar a fonte |
 | `--help` | Sintaxe da linha de comando |
 | `--version` | Versão do compilador |
 
@@ -117,7 +124,7 @@ Os dumps também usam `stdout`. Diagnósticos e mensagens de debug usam
 | 0 | Fonte aceita |
 | 1 | Erro léxico, sintático ou semântico |
 | 2 | Uso incorreto da CLI, opção desconhecida ou extensão inválida |
-| 3 | Falha ao abrir ou ler o arquivo |
+| 3 | Falha ao ler a fonte ou escrever a saída |
 | 4 | Falha interna, inclusive erro de alocação |
 
 ## Testes
@@ -141,7 +148,135 @@ casos de entrada truncada, profundidade excessiva, regras semânticas e retorno
 em todos os caminhos de funções não vazias. O script usa um limite de dez
 segundos por execução quando o comando `timeout` está disponível.
 
-O resumo final tem este formato:
+O teste completo também gera IR para os programas em `tests/execucao`,
+valida com `llvm-as` e `opt -passes=verify`, liga o runtime com `llvm-link`,
+executa com `lli` e compila/executa nativamente com Clang. Saída, entrada e
+status são comparados com os arquivos de referência. Dependências ausentes
+causam falha no teste completo; use `test-frontend` para testar só o front-end.
+
+## Gerar e executar LLVM IR
+
+```sh
+./build/debug/macaronica tests/execucao/05_lacos.mac -o build/programa.ll
+llvm-as build/programa.ll -o build/programa.bc
+opt -passes=verify build/programa.ll -disable-output
+clang -std=c99 -O0 -emit-llvm -c runtime/zl_runtime_posix.c -o build/runtime.bc
+llvm-link build/programa.bc build/runtime.bc -o build/programa_ligado.bc
+lli build/programa_ligado.bc
+clang build/programa.ll runtime/zl_runtime_posix.c -lm -o build/programa
+./build/programa
+```
+
+No Windows, acrescente `.exe` aos executáveis gerados. O LLVM/Clang do
+MSYS2 UCRT64 usa a toolchain GNU instalada junto com ele. Para instalar os
+componentes necessários no terminal MSYS2:
+
+```sh
+pacman -S --needed mingw-w64-ucrt-x86_64-clang mingw-w64-ucrt-x86_64-llvm-tools
+export PATH=/ucrt64/bin:$PATH
+```
+
+O instalador Windows do Clang pode não incluir `opt`, `lli` e `llvm-as`.
+Confirme cada ferramenta com `--version`. Não misture bitcode de versões
+principais diferentes. O módulo da Macaronica não fixa triple nem datalayout;
+a compilação do runtime e a ligação escolhem o hospedeiro. O ponto de entrada
+gerado é `@zl_principal`; `main` pertence ao runtime.
+
+No PowerShell, use as ferramentas MSYS2 na sessão:
+
+```powershell
+$env:Path = "C:\msys64\ucrt64\bin;C:\msys64\usr\bin;$env:Path"
+mingw32-make test
+```
+
+O runner aceita `LLVM_BINDIR` ou os caminhos individuais `LLVM_AS`,
+`LLVM_OPT`, `LLVM_LLI`, `LLVM_CLANG` e `LLVM_LINK`. No Windows, ele executa
+`lli` com o runtime em DLL, pois o JIT UCRT64 testado apresentou problemas
+de resolução do CRT no runtime em bitcode. O modo POSIX usa `llvm-link` e
+`lli` sobre os módulos ligados. Os comandos manuais Windows estão em
+[`docs/decisoes_backend.md`](docs/decisoes_backend.md).
+
+Versões usadas nesta validação: GCC 16.2.0, LLVM/Clang 22.1.8, Windows x86_64
+com MSYS2 UCRT64. As versões indicam o ambiente testado; LLVM 15+ é o mínimo
+do formato de IR com `ptr`, não uma afirmação de teste de cada versão.
+A suíte PjBL 1/3 passou 119/119 verificações, incluindo 82 regressões do
+front-end, onze programas positivos, sete falhas de execução, entrada com
+NUL e análise de otimizações. A rota C acrescenta 21/21 verificações, também
+executadas por make test. A execução em Linux ainda não foi realizada
+neste ambiente; o runner mantém o fluxo POSIX por bitcode.
+
+Os tipos são `bool → i1`, `inteira → i32`, `flut → float`,
+`duplocarpado → double`, `palavra → ptr`, registros nominais e vetores de
+comprimento fixo. As promoções numéricas autorizadas geram `sitofp`/`fpext`;
+a fonte não tem casts. `E`/`OU` usam curto-circuito, `XOR` avalia ambos os
+operandos, `/` divide reais e `//` divide inteiros com truncamento para zero.
+Os detalhes de avaliação, inicialização, limites e erros estão em
+[`docs/decisoes_backend.md`](docs/decisoes_backend.md).
+
+## Otimizações e defesa
+
+```sh
+opt -S -passes=mem2reg build/programa.ll -o build/programa_mem2reg.ll
+opt -S -O2 build/programa.ll -o build/programa_O2.ll
+```
+
+A IR inicial usa `alloca` no bloco `entry`, `load` e `store`. `mem2reg`
+promove os locais elegíveis e cria `phi` nos encontros do CFG. Vetores,
+registros e objetos cujo endereço precisa ser preservado podem permanecer
+em memória. A análise deve comparar a mesma saída antes/depois e identificar
+os predecessores de cada `phi`, sem atribuir transformações a passes não
+observados. Não há uma IR própria de três endereços nem otimizador próprio.
+
+## ESP32: LED azul integrado, GPIO 2
+
+O programa [examples/esp32_blink.mac](examples/esp32_blink.mac) configura o
+GPIO 2 e alterna `VER`/`FAL`, com `espera(1000)` entre as mudanças. Usa o LED
+azul programável da DOIT DevKit V1; o LED de alimentação não é controlado.
+
+No PowerShell, na raiz do repositório:
+
+```powershell
+# Gera C e constrói o firmware (ESP-IDF instalado).
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\esp32.ps1 -Action build
+# Repete a geração/build e grava pela porta da placa.
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\esp32.ps1 -Action flash -Port COM4
+# Monitor serial: sair com Ctrl+].
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\esp32.ps1 -Action monitor -Port COM4
+```
+
+Equivalentes com Make: `mingw32-make placa`,
+`mingw32-make placa-gravar PORT=COM4` e
+`mingw32-make placa-monitor PORT=COM4`. Para outra fonte, passe
+`-Program caminho/programa.mac` ou `PROG=caminho/programa.mac`.
+
+O script procura `IDF_PATH` ou `C:/Espressif/frameworks/esp-idf-v5.5.2`;
+aceita `-IdfPath` para outra instalação. Gera
+`build/esp32-generated/prog_gerado.c` e registra hashes da fonte, do compilador
+e do C em `proveniencia.json`. O ESP-IDF compila esse C junto ao runtime;
+`app_main` chama `zl_principal`. O build fica em `build/esp32`.
+O caminho curto Windows 8.3 permite usar este repositório com espaços.
+
+Para inspecionar apenas o C: `-Action generate` ou `mingw32-make placa-gerar`.
+`mingw32-make test-c` verifica a rota C e simula ciclos do blink no host;
+essa simulação não comprova que o LED físico acendeu.
+ESP-IDF 5.5.2: firmware construído e gravado pela COM4; captura UART com oito
+eventos alternados a aproximadamente 1 s. A luz do LED requer confirmação
+visual. O runtime ESP32 desta etapa atende GPIO/espera e texto/nova linha;
+serviços numéricos e de entrada ainda dependem do runtime POSIX.
+Versões, evidências e limitações estão em [docs/placa.md](docs/placa.md).
+
+## Uso de IA
+
+O desenvolvimento usa Codex para diagnóstico, implementação, revisão,
+documentação e execução de testes, com responsabilidades de arquitetura,
+linguagem, IR, runtime, testes, otimização e revisão pedagógica. Propostas de
+IA exigem revisão do grupo e validação pelas ferramentas. O grupo deve saber
+explicar a AST anotada, os tipos, os blocos/terminadores, as guardas de runtime,
+as conversões e o efeito de `mem2reg`/`phi`. Resultados de testes relatados
+referem-se apenas às ferramentas efetivamente executadas, não a uma prova
+formal de correção.
+
+## Fluxo de trabalho
 
 ```text
 develop -> branch-de-trabalho -> develop -> main
@@ -153,5 +288,10 @@ develop -> branch-de-trabalho -> develop -> main
 
 | Documento | Conteúdo |
 |---|---|
-| [`docs/guia-defesa-autoria.md`](docs/guia-defesa-autoria.md) | Guia para compreender e apresentar o front-end. |
+| [`docs/comandos.md`](docs/comandos.md) | Comandos PowerShell para executar no PC e gerar/gravar firmware na ESP32. |
+| [`docs/decisoes.md`](docs/decisoes.md) | Semântica da Macaronica e extensões explícitas do projeto. |
+| [`docs/gramatica.md`](docs/gramatica.md) | Gramática operacional. |
+| [`docs/decisoes_backend.md`](docs/decisoes_backend.md) | Tipos LLVM, runtime, portabilidade e execução do PjBL 3. |
+| [`docs/otimizacoes.md`](docs/otimizacoes.md) | Evidências de SSA, `mem2reg`, `phi`, `-O2` e equivalência. |
+| [`docs/guia-defesa-pjbl3.md`](docs/guia-defesa-pjbl3.md) | Guia de código, conceitos das aulas e perguntas de arguição. |
 | [`docs/diagnosticos.md`](docs/diagnosticos.md) | Catálogo dos códigos de erro léxico, sintático e semântico. |

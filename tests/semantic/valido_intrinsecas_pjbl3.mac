@@ -1,0 +1,18 @@
+vazio principal() @
+[
+    inteira i;
+    flut f;
+    duplocarpado d;
+    i receba leInteira();
+    f receba leFlut();
+    d receba leDuplocarpado();
+    imprimeInteira(i);
+    imprimeFlut(i);
+    imprimeFlut(f);
+    imprimeDuplocarpado(f);
+    imprimeDuplocarpado(d);
+    imprimePalavra("texto");
+    imprimeBool(VER);
+    imprimeNl();
+    respost;
+]

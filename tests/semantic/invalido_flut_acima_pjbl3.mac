@@ -1,0 +1,6 @@
+vazio principal() @
+[
+    flut numero;
+    numero receba 340282400000000000000000000000000000000.0;
+    respost;
+]

@@ -119,6 +119,7 @@ const char *diagnostic_phase_name(DiagnosticPhase phase)
     case DIAGNOSTIC_PHASE_LEXICAL: return "lexico";
     case DIAGNOSTIC_PHASE_SYNTACTIC: return "sintatico";
     case DIAGNOSTIC_PHASE_SEMANTIC: return "semantico";
+    case DIAGNOSTIC_PHASE_CODEGEN: return "geracao";
     default: return "desconhecido";
     }
 }

@@ -63,7 +63,8 @@ typedef enum {
     TOKEN_LEFT_BRACKET,
     TOKEN_RIGHT_BRACKET,
     TOKEN_LEFT_BRACE,
-    TOKEN_RIGHT_BRACE
+    TOKEN_RIGHT_BRACE,
+    TOKEN_DOT
 } TokenKind;
 
 /* Guarda o valor do literal depois da conversao. O kind diz qual campo usar. */

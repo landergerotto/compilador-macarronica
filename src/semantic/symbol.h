@@ -28,8 +28,27 @@ typedef enum {
     SYMBOL_LOCAL_VARIABLE,
     SYMBOL_PARAMETER,
     SYMBOL_VECTOR,
-    SYMBOL_FIELD
+    SYMBOL_FIELD,
+    SYMBOL_BUILTIN_FUNCTION
 } SymbolCategory;
+
+/* Identidade das intrinsecas: o codegen nao precisa comparar nomes da fonte. */
+typedef enum {
+    BUILTIN_NONE,
+    BUILTIN_PRINT_INTEGER,
+    BUILTIN_PRINT_FLOAT,
+    BUILTIN_PRINT_DOUBLE,
+    BUILTIN_PRINT_WORD,
+    BUILTIN_PRINT_BOOL,
+    BUILTIN_PRINT_NEWLINE,
+    BUILTIN_READ_INTEGER,
+    BUILTIN_READ_FLOAT,
+    BUILTIN_READ_DOUBLE,
+    BUILTIN_PIN_MODE,
+    BUILTIN_PIN_WRITE,
+    BUILTIN_PIN_READ,
+    BUILTIN_DELAY_MS
+} BuiltinKind;
 
 /* Escopos que existem hoje. cond, repete e durante nao criam um novo. */
 typedef enum {
@@ -64,6 +83,8 @@ typedef struct {
     size_t element_type_id;
     long long array_size;
     int is_principal;
+    BuiltinKind builtin_kind;
+    size_t field_index; /* Ordinal textual; SYMBOL_ID_NONE para outros simbolos. */
 } Symbol;
 
 /* Lista de simbolos junto com a arvore de escopos. */
