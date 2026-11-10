@@ -8,6 +8,8 @@
 #include "parser/parser.h"
 #include "semantic/semantic.h"
 #include "ir/codegen_llvm.h"
+#include "codegen_c.h"
+#include "target.h"
 
 #include <errno.h>
 #include <stdio.h>
@@ -32,11 +34,12 @@ static void dump_tokens(const TokenBuffer *tokens, const char *path)
  * depois de toda a IR ter sido gerada e descarregada com sucesso. Assim um
  * erro de fonte ou de codegen preserva ate uma saida preexistente.
  */
-static CompilerExitCode write_llvm_output(const SourceFile *source,
+static CompilerExitCode write_generated_output(const SourceFile *source,
                                           const AstNode *program,
                                           const SemanticResult *semantic,
                                           DiagnosticBag *diagnostics,
-                                          const char *output_path)
+                                          const char *output_path,
+                                          int emit_c)
 {
     FILE *temporary = tmpfile();
     FILE *output = NULL;
@@ -52,7 +55,8 @@ static CompilerExitCode write_llvm_output(const SourceFile *source,
                       output_path, strerror(errno));
         return COMPILER_EXIT_IO_ERROR;
     }
-    status = codegen_llvm_emit(source, program, semantic, diagnostics, temporary);
+    status = emit_c ? codegen_c_emit(source, program, semantic, diagnostics, temporary)
+                    : codegen_llvm_emit(source, program, semantic, diagnostics, temporary);
     if (status != FRONTEND_STATUS_OK) {
         result = ferror(temporary) ? COMPILER_EXIT_IO_ERROR :
                  status == FRONTEND_STATUS_SOURCE_ERROR ? COMPILER_EXIT_SOURCE_ERROR :
@@ -179,14 +183,23 @@ CompilerExitCode compiler_compile_file(const char *path,
         goto diagnostics_and_cleanup;
     }
 
+    phase_status = target_validate(&source, program, &semantic, &diagnostics,
+                                   options->target_esp32, options->ram_limit);
+    if (phase_status != FRONTEND_STATUS_OK) {
+        exit_code = phase_status == FRONTEND_STATUS_SOURCE_ERROR
+                        ? COMPILER_EXIT_SOURCE_ERROR : COMPILER_EXIT_INTERNAL_ERROR;
+        goto diagnostics_and_cleanup;
+    }
     if (options->output_path != NULL) {
-        exit_code = write_llvm_output(&source, program, &semantic, &diagnostics, options->output_path);
+        exit_code = write_generated_output(&source, program, &semantic, &diagnostics,
+                                           options->output_path, options->emit_c);
         if (exit_code != COMPILER_EXIT_SUCCESS) goto diagnostics_and_cleanup;
     }
     exit_code = COMPILER_EXIT_SUCCESS;
     if (!options->dump_tokens && !options->dump_ast && !options->dump_symbols) {
         if (options->output_path != NULL)
-            (void)printf("%s: LLVM IR gerada em %s\n", path, options->output_path);
+            (void)printf("%s: %s gerado em %s\n", path,
+                          options->emit_c ? "C99" : "LLVM IR", options->output_path);
         else
             (void)printf("%s: arquivo lexica, sintatica e semanticamente valido\n", path);
     }

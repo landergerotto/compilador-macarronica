@@ -1,6 +1,8 @@
 #ifndef MACARONICA_COMPILER_H
 #define MACARONICA_COMPILER_H
 
+#include <stddef.h>
+
 /*
  * Os dumps mostram as fases. output_path solicita LLVM IR depois da semantica;
  * NULL mantem o modo de validacao. A string pertence ao chamador.
@@ -10,6 +12,9 @@ typedef struct {
     int dump_ast;
     int dump_symbols;
     const char *output_path;
+    int emit_c;
+    int target_esp32;
+    size_t ram_limit;
 } CompilerOptions;
 
 /* O numero que o programa devolve quando termina. */

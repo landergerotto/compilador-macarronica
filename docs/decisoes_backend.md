@@ -198,3 +198,15 @@ placa ou mudança na semântica Macaronica.
 A análise com trechos reais e resultados de execução está em
 [otimizacoes.md](otimizacoes.md); a preparação para arguição está em
 [guia-defesa-pjbl3.md](guia-defesa-pjbl3.md).
+
+
+## Rota C para ESP32 (PjBL 4, parte D)
+
+`--emit-c` usa a mesma AST anotada da análise semântica e emite C99 diretamente,
+sem passar pelo LLVM IR nem por uma IR própria. `--alvo=esp32` seleciona essa
+saída e habilita GPIO/espera; o padrão continua gerando LLVM IR portátil.
+O programa C define `int32_t zl_principal(void)`; o runtime ESP-IDF define
+`app_main`, adapta os serviços `zl_*` e mantém detalhes de FreeRTOS/GPIO fora
+do lexer, parser e semântica comum. Temporários C explicitam a ordem de
+avaliação, e helpers usam aritmética unsigned para preservar wrap de i32.
+Ver [placa.md](placa.md) para o blink do LED integrado e construção do firmware.

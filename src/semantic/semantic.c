@@ -181,31 +181,36 @@ static int declare_builtins(SemanticAnalyzer *analyzer)
         const char *name;
         BuiltinKind kind;
         size_t return_type;
-        size_t parameter_type;
+        size_t parameter_types[2];
+        size_t parameter_count;
     } builtins[] = {
-        { "imprimeInteira", BUILTIN_PRINT_INTEGER, TYPE_ID_VOID, TYPE_ID_INTEGER },
-        { "imprimeFlut", BUILTIN_PRINT_FLOAT, TYPE_ID_VOID, TYPE_ID_FLOAT },
-        { "imprimeDuplocarpado", BUILTIN_PRINT_DOUBLE, TYPE_ID_VOID, TYPE_ID_DOUBLE },
-        { "imprimePalavra", BUILTIN_PRINT_WORD, TYPE_ID_VOID, TYPE_ID_WORD },
-        { "imprimeBool", BUILTIN_PRINT_BOOL, TYPE_ID_VOID, TYPE_ID_BOOL },
-        { "imprimeNl", BUILTIN_PRINT_NEWLINE, TYPE_ID_VOID, TYPE_ID_NONE },
-        { "leInteira", BUILTIN_READ_INTEGER, TYPE_ID_INTEGER, TYPE_ID_NONE },
-        { "leFlut", BUILTIN_READ_FLOAT, TYPE_ID_FLOAT, TYPE_ID_NONE },
-        { "leDuplocarpado", BUILTIN_READ_DOUBLE, TYPE_ID_DOUBLE, TYPE_ID_NONE }
+        { "imprimeInteira", BUILTIN_PRINT_INTEGER, TYPE_ID_VOID, { TYPE_ID_INTEGER }, 1U },
+        { "imprimeFlut", BUILTIN_PRINT_FLOAT, TYPE_ID_VOID, { TYPE_ID_FLOAT }, 1U },
+        { "imprimeDuplocarpado", BUILTIN_PRINT_DOUBLE, TYPE_ID_VOID, { TYPE_ID_DOUBLE }, 1U },
+        { "imprimePalavra", BUILTIN_PRINT_WORD, TYPE_ID_VOID, { TYPE_ID_WORD }, 1U },
+        { "imprimeBool", BUILTIN_PRINT_BOOL, TYPE_ID_VOID, { TYPE_ID_BOOL }, 1U },
+        { "imprimeNl", BUILTIN_PRINT_NEWLINE, TYPE_ID_VOID, { TYPE_ID_NONE }, 0U },
+        { "leInteira", BUILTIN_READ_INTEGER, TYPE_ID_INTEGER, { TYPE_ID_NONE }, 0U },
+        { "leFlut", BUILTIN_READ_FLOAT, TYPE_ID_FLOAT, { TYPE_ID_NONE }, 0U },
+        { "leDuplocarpado", BUILTIN_READ_DOUBLE, TYPE_ID_DOUBLE, { TYPE_ID_NONE }, 0U },
+        { "pinoModo", BUILTIN_PIN_MODE, TYPE_ID_VOID, { TYPE_ID_INTEGER, TYPE_ID_INTEGER }, 2U },
+        { "pinoEscreve", BUILTIN_PIN_WRITE, TYPE_ID_VOID, { TYPE_ID_INTEGER, TYPE_ID_BOOL }, 2U },
+        { "pinoLe", BUILTIN_PIN_READ, TYPE_ID_BOOL, { TYPE_ID_INTEGER }, 1U },
+        { "espera", BUILTIN_DELAY_MS, TYPE_ID_VOID, { TYPE_ID_INTEGER }, 1U }
     };
     SourceSpan span = source_span(source_position(0U, 0U, 0U),
                                   source_position(0U, 0U, 0U));
     size_t index;
     for (index = 0U; index < sizeof(builtins) / sizeof(builtins[0]); ++index) {
         size_t symbol_id;
-        size_t count = builtins[index].parameter_type == TYPE_ID_NONE ? 0U : 1U;
         Symbol *symbol;
         if (!declare_symbol(analyzer, builtins[index].name, span,
                             SYMBOL_NAMESPACE_FUNCTION, SYMBOL_BUILTIN_FUNCTION,
                             builtins[index].return_type,
                             analyzer->result->global_scope_id, &symbol_id) ||
             !symbol_set_parameters(&analyzer->result->symbols, symbol_id,
-                                   &builtins[index].parameter_type, count)) {
+                                   builtins[index].parameter_types,
+                                   builtins[index].parameter_count)) {
             allocation_error(analyzer, span);
             return 0;
         }

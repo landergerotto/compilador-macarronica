@@ -206,9 +206,25 @@ As revisões para o PjBL 3 foram decididas pelo projeto para cumprir o escopo so
 3. **Decisão do projeto:** o programa termina com status não zero e diagnóstico em `stderr`, incluindo ao menos a linha da fonte, nos seguintes casos: divisor zero de `/` ou `//` (incluindo `-0.0`), `-2147483648 // -1`, índice fora de `0..N-1`, argumento negativo de `raiz`, expoente negativo de potência inteira e falha de leitura de D-017. A raiz real e a potência real usam operações da precisão declarada; para potência, domínio inválido detectado pela biblioteca matemática também é erro. `0 ^ 0` vale 1. Potência inteira pode ser calculada por exponenciação por quadrados em aritmética modular. Estes testes de valor podem ocorrer estaticamente, quando comprováveis, ou no runtime; uma entrada sem erro estático não pode escapar das verificações dinâmicas necessárias.
 4. **Impacto:** o codegen emite guardas antes de divisão/GEP ou chama auxiliares verificados do runtime. O runtime fornece uma rotina de falha `zl_*` sem retorno e funções matemáticas quando necessárias, com ABI em `decisoes_backend.md`. Testes negativos de execução conferem status e linha; testes positivos conferem truncamento de `//` com sinais diferentes e raiz/potência nas duas precisões. O runtime fica separado e o módulo LLVM não fixa placa, triple ou datalayout.
 
+## D-024 - Intrínsecas de GPIO para o alvo ESP32
+
+1. **Regra oficial:** a sintaxe Macaronica não define GPIO, temporização de placa nem nomes de pinos. Os tipos e as regras de expressão dos PjBL 1 e 3 continuam válidos.
+2. **Lacuna:** um programa-fonte precisa controlar GPIO físico no ESP32 DevKit V1 sem incorporar chamadas C ou símbolos `zl_*` à gramática da Macaronica.
+3. **Decisão do projeto para o PjBL 4:** acrescentam-se funções intrínsecas predeclaradas, com a sintaxe de chamada existente e sem novos tokens. Seus nomes seguem D-003, que não admite sublinhado em identificadores da fonte:
+
+   | Nome na fonte | Parâmetros | Retorno | Significado |
+   |---|---|---|---|
+   | `pinoModo` | `inteira pino, inteira modo` | `vazio` | configura 0 = entrada, 1 = saída, 2 = entrada com pull-up, 3 = entrada com pull-down |
+   | `pinoEscreve` | `inteira pino, bool nivel` | `vazio` | `VER` = nível alto de 3,3 V; `FAL` = nível baixo |
+   | `pinoLe` | `inteira pino` | `bool` | lê nível lógico; alto resulta em `VER` |
+   | `espera` | `inteira milissegundos` | `vazio` | solicita atraso em ticks do FreeRTOS, arredondando duração positiva para cima; a precisão física depende do escalonador |
+
+   `espera(0)` não introduz espera. Duração negativa é erro de execução. Os quatro nomes ocupam o namespace global de funções e não podem ser redefinidos. Essas intrínsecas somente podem ser chamadas na compilação com `--alvo=esp32`; o alvo padrão de PC/POSIX continua com as regras do PjBL 3. Uma chamada sem o alvo ESP32 é erro de validação de alvo com localização da chamada, após a análise semântica comum, mesmo quando a assinatura é válida. Valores de pino e modo são conferidos pelo runtime ESP-IDF. Pinos ligados à flash (GPIO6–11) são proibidos; GPIO34–39 não podem ser saídas e não oferecem os modos com pull interno. `pinoEscreve` exige configuração prévia como saída; `pinoLe`, configuração prévia como entrada. A escolha de pino para um circuito concreto depende do pinout da placa e é registrada em `placa.md`, sem presumir LED onboard.
+4. **Impacto:** lexer e parser reutilizam identificadores, chamadas e tipos existentes. A semântica predeclara as quatro assinaturas; a validação do alvo rejeita seu uso fora de ESP32 com diagnóstico específico. O gerador C seleciona a intrínseca por identidade de símbolo. O backend LLVM do PC mantém o contrato do PjBL 3; a validação de alvo impede chamadas GPIO nessa rota. A ABI C da placa usa `zl_pino_modo`, `zl_pino_escreve`, `zl_pino_le` e `zl_espera_ms`, com linha da fonte oculta acrescentada pelo gerador para erros de execução. O argumento `bool` de escrita é expandido para inteiro 0/1 na fronteira C; a leitura retorna inteiro 0/1 e o gerador o converte para `bool`. Testes verificam assinaturas, proibição no alvo padrão, modos e erros de GPIO no alvo ESP32. Esta extensão pertence ao projeto, não ao enunciado original da Macaronica.
+
 ## Questões pendentes para uma versão posterior
 
 - Avaliar promoção entre operandos de operadores, fora do escopo de D-012.
 - Definir literal próprio de `duplocarpado`.
 - Definir leitura de texto e outras operações de texto, se necessárias.
-- Escolher placa e política de implementação de binary64 apenas no PjBL 4; preservar os tipos e a ABI documentados no PjBL 3.
+- Medir na ferramenta ESP-IDF escolhida o custo e a precisão efetiva de `duplocarpado` como binary64 no ESP32 clássico, preservando a semântica documentada no PjBL 3.

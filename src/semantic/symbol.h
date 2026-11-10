@@ -43,7 +43,11 @@ typedef enum {
     BUILTIN_PRINT_NEWLINE,
     BUILTIN_READ_INTEGER,
     BUILTIN_READ_FLOAT,
-    BUILTIN_READ_DOUBLE
+    BUILTIN_READ_DOUBLE,
+    BUILTIN_PIN_MODE,
+    BUILTIN_PIN_WRITE,
+    BUILTIN_PIN_READ,
+    BUILTIN_DELAY_MS
 } BuiltinKind;
 
 /* Escopos que existem hoje. cond, repete e durante nao criam um novo. */

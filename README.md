@@ -7,8 +7,9 @@ tipos, escopos, chamadas e retornos.
 
 A etapa PjBL 3 gera LLVM IR textual diretamente da AST semanticamente
 validada, com runtime C separado. O pipeline é fonte → lexer → parser/AST →
-semântica → LLVM IR → ferramentas LLVM → execução no hospedeiro. O PjBL 4
-(placa, ISA, MLIR e otimizações próprias) permanece uma etapa futura.
+semântica → LLVM IR → ferramentas LLVM → execução no hospedeiro. A rota da
+ESP32 (PjBL 4, parte D) reutiliza a AST validada para gerar C99 e firmware
+ESP-IDF. MLIR, DSL vetorial e benchmarks ficam fora desta etapa.
 
 ## Requisitos
 
@@ -198,9 +199,10 @@ de resolução do CRT no runtime em bitcode. O modo POSIX usa `llvm-link` e
 Versões usadas nesta validação: GCC 16.2.0, LLVM/Clang 22.1.8, Windows x86_64
 com MSYS2 UCRT64. As versões indicam o ambiente testado; LLVM 15+ é o mínimo
 do formato de IR com `ptr`, não uma afirmação de teste de cada versão.
-O teste completo passou 119/119 verificações, incluindo 82 regressões do
+A suíte PjBL 1/3 passou 119/119 verificações, incluindo 82 regressões do
 front-end, onze programas positivos, sete falhas de execução, entrada com
-NUL e análise de otimizações. A execução em Linux ainda não foi realizada
+NUL e análise de otimizações. A rota C acrescenta 21/21 verificações, também
+executadas por make test. A execução em Linux ainda não foi realizada
 neste ambiente; o runner mantém o fluxo POSIX por bitcode.
 
 Os tipos são `bool → i1`, `inteira → i32`, `flut → float`,
@@ -225,6 +227,44 @@ em memória. A análise deve comparar a mesma saída antes/depois e identificar
 os predecessores de cada `phi`, sem atribuir transformações a passes não
 observados. Não há uma IR própria de três endereços nem otimizador próprio.
 
+## ESP32: LED azul integrado, GPIO 2
+
+O programa [examples/esp32_blink.mac](examples/esp32_blink.mac) configura o
+GPIO 2 e alterna `VER`/`FAL`, com `espera(1000)` entre as mudanças. Usa o LED
+azul programável da DOIT DevKit V1; o LED de alimentação não é controlado.
+
+No PowerShell, na raiz do repositório:
+
+```powershell
+# Gera C e constrói o firmware (ESP-IDF instalado).
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\esp32.ps1 -Action build
+# Repete a geração/build e grava pela porta da placa.
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\esp32.ps1 -Action flash -Port COM4
+# Monitor serial: sair com Ctrl+].
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\esp32.ps1 -Action monitor -Port COM4
+```
+
+Equivalentes com Make: `mingw32-make placa`,
+`mingw32-make placa-gravar PORT=COM4` e
+`mingw32-make placa-monitor PORT=COM4`. Para outra fonte, passe
+`-Program caminho/programa.mac` ou `PROG=caminho/programa.mac`.
+
+O script procura `IDF_PATH` ou `C:/Espressif/frameworks/esp-idf-v5.5.2`;
+aceita `-IdfPath` para outra instalação. Gera
+`build/esp32-generated/prog_gerado.c` e registra hashes da fonte, do compilador
+e do C em `proveniencia.json`. O ESP-IDF compila esse C junto ao runtime;
+`app_main` chama `zl_principal`. O build fica em `build/esp32`.
+O caminho curto Windows 8.3 permite usar este repositório com espaços.
+
+Para inspecionar apenas o C: `-Action generate` ou `mingw32-make placa-gerar`.
+`mingw32-make test-c` verifica a rota C e simula ciclos do blink no host;
+essa simulação não comprova que o LED físico acendeu.
+ESP-IDF 5.5.2: firmware construído e gravado pela COM4; captura UART com oito
+eventos alternados a aproximadamente 1 s. A luz do LED requer confirmação
+visual. O runtime ESP32 desta etapa atende GPIO/espera e texto/nova linha;
+serviços numéricos e de entrada ainda dependem do runtime POSIX.
+Versões, evidências e limitações estão em [docs/placa.md](docs/placa.md).
+
 ## Uso de IA
 
 O desenvolvimento usa Codex para diagnóstico, implementação, revisão,
@@ -248,6 +288,7 @@ develop -> branch-de-trabalho -> develop -> main
 
 | Documento | Conteúdo |
 |---|---|
+| [`docs/comandos.md`](docs/comandos.md) | Comandos PowerShell para executar no PC e gerar/gravar firmware na ESP32. |
 | [`docs/decisoes.md`](docs/decisoes.md) | Semântica da Macaronica e extensões explícitas do projeto. |
 | [`docs/gramatica.md`](docs/gramatica.md) | Gramática operacional. |
 | [`docs/decisoes_backend.md`](docs/decisoes_backend.md) | Tipos LLVM, runtime, portabilidade e execução do PjBL 3. |
