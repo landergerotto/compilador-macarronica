@@ -1,0 +1,11 @@
+/.github
+/.codex
+*.md
+!docs/*.md
+/build/
+*.o
+*.obj
+*.exe
+*.gcda
+*.gcno
+*.gcov

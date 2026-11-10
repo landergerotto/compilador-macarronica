@@ -1,0 +1,25 @@
+inteira chamadas;
+
+outrafuncao inteira fatorial(inteira n) @
+[
+    chamadas receba chamadas + 1;
+    cond (n < 2) edai
+    [
+        respost 1;
+    ]
+    casocontrario edai
+    [
+        respost n * fatorial(n - 1);
+    ]
+]
+
+inteira principal() @
+[
+    inteira resultado;
+    resultado receba fatorial(7);
+    imprimeInteira(resultado);
+    imprimeNl();
+    imprimeInteira(chamadas);
+    imprimeNl();
+    respost 0;
+]

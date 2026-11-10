@@ -1,0 +1,9 @@
+registro Primeiro @ [ inteira valor; ]
+registro Segundo @ [ inteira valor; ]
+vazio principal() @
+[
+    Primeiro a;
+    Segundo b;
+    a receba b;
+    respost;
+]

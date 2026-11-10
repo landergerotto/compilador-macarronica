@@ -1,0 +1,5 @@
+vazio principal() @
+[
+    imprimeNl(1);
+    respost;
+]

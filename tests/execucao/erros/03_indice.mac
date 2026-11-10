@@ -1,0 +1,8 @@
+inteira principal() @
+[
+    inteira vet{2} valores;
+    inteira indice;
+    indice receba 2;
+    imprimeInteira(valores{indice});
+    respost 0;
+]

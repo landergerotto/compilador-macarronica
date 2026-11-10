@@ -1,0 +1,11 @@
+vazio principal() @
+[
+    bool a, b, c;
+    a receba VER;
+    b receba FAL;
+    c receba VER;
+    cond (a OU b E c) edai
+    [
+        respost;
+    ]
+]

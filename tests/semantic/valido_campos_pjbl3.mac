@@ -1,0 +1,16 @@
+registro Endereco @ [ inteira numero; ]
+registro Pessoa @ [ Endereco endereco; palavra nome; ]
+
+outrafuncao Pessoa copia(Pessoa origem) @ [ respost origem; ]
+
+vazio principal() @
+[
+    Pessoa p, outra;
+    Pessoa vet{2} pessoas;
+    inteira numero;
+    p.endereco.numero receba 42;
+    pessoas{1}.endereco.numero receba p.endereco.numero;
+    outra receba copia(p);
+    numero receba copia(outra).endereco.numero;
+    respost;
+]

@@ -1,0 +1,28 @@
+inteira global;
+registro Par @ [ inteira numero; palavra nome; ]
+outrafuncao duplocarpado soma(duplocarpado a, duplocarpado b) @
+[
+    respost a + b;
+]
+inteira principal() @
+[
+    inteira a;
+    flut f;
+    duplocarpado d;
+    palavra texto;
+    bool b;
+    Par par;
+    a receba -2147483648;
+    a receba 8 // 2;
+    f receba 0.1;
+    d receba soma(a, f);
+    texto receba "Ola\n";
+    b receba texto == "Ola\n" XOR FAL;
+    imprimeInteira(a);
+    imprimeFlut(f / 2.0);
+    imprimeDuplocarpado(d);
+    imprimePalavra(texto);
+    imprimeBool(NÃO b);
+    imprimeNl();
+    respost 0;
+]

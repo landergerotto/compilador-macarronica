@@ -1,0 +1,14 @@
+inteira principal() @
+[
+    imprimeInteira(2 + 3 * 4);
+    imprimeNl();
+    imprimeInteira(-7 // 3);
+    imprimeNl();
+    imprimeFlut(7.5 / 2.5);
+    imprimeNl();
+    imprimeInteira(2 ^ 3 ^ 2);
+    imprimeNl();
+    imprimeFlut(raiz(9.0));
+    imprimeNl();
+    respost 0;
+]

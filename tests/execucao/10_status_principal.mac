@@ -1,0 +1,6 @@
+inteira principal() @
+[
+    imprimePalavra("retorno");
+    imprimeNl();
+    respost 7;
+]

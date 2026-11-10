@@ -1,0 +1,12 @@
+registro Pessoa @
+[
+    palavra nome;
+    inteira idade;
+    bool ativa;
+]
+
+vazio principal() @
+[
+    Pessoa pessoa;
+    respost;
+]

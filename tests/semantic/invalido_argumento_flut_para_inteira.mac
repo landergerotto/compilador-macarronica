@@ -1,0 +1,2 @@
+outrafuncao vazio recebe(inteira n) @ [ respost; ]
+vazio principal() @ [ flut origem; origem receba 1.5; recebe(origem); respost; ]

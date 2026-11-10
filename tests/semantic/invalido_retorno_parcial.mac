@@ -1,0 +1,12 @@
+outrafuncao inteira teste(inteira x) @
+[
+    cond (x > 0) edai
+    [
+        respost 1;
+    ]
+]
+
+inteira principal() @
+[
+    respost teste(5);
+]

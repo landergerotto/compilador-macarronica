@@ -1,0 +1,18 @@
+outrafuncao inteira quadrado(inteira numero) @
+[
+    respost numero * numero;
+]
+
+inteira principal() @
+[
+    inteira valor;
+    valor receba quadrado(5);
+    cond (valor > 20) edai
+    [
+        respost 1;
+    ]
+    casocontrario edai
+    [
+        respost 0;
+    ]
+]

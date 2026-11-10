@@ -1,0 +1,2 @@
+# Flash detectada na DevKit V1 desta sessao: 4 MB.
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y

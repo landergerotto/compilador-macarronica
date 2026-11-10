@@ -1,0 +1,30 @@
+inteira chamadas;
+
+outrafuncao bool marca() @
+[
+    chamadas receba chamadas + 1;
+    respost VER;
+]
+
+outrafuncao inteira escolhe(bool habilita) @
+[
+    cond (habilita E (FAL OU marca())) edai
+    [
+        respost 7;
+    ]
+    casocontrario edai
+    [
+        respost 9;
+    ]
+]
+
+inteira principal() @
+[
+    imprimeInteira(escolhe(FAL));
+    imprimeNl();
+    imprimeInteira(escolhe(VER));
+    imprimeNl();
+    imprimeInteira(chamadas);
+    imprimeNl();
+    respost 0;
+]

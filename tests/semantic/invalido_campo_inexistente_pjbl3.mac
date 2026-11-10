@@ -1,0 +1,7 @@
+registro Pessoa @ [ inteira idade; ]
+vazio principal() @
+[
+    Pessoa p;
+    p.nome receba 1;
+    respost;
+]

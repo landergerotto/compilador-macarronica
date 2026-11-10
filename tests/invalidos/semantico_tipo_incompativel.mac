@@ -1,0 +1,6 @@
+vazio principal() @
+[
+    inteira quantidade;
+    quantidade receba 1.5;
+    respost;
+]

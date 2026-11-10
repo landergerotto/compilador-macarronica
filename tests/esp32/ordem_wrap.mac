@@ -1,0 +1,30 @@
+inteira estado;
+
+outrafuncao inteira marca(inteira n) @
+[
+    estado receba estado * 10 + n;
+    respost n;
+]
+
+outrafuncao inteira junta(inteira a, inteira b) @
+[
+    respost a * 10 + b;
+]
+
+inteira principal() @
+[
+    imprimeInteira(marca(1) + marca(2));
+    imprimeNl();
+    imprimeInteira(estado);
+    imprimeNl();
+    estado receba 0;
+    imprimeInteira(junta(marca(3), marca(4)));
+    imprimeNl();
+    imprimeInteira(estado);
+    imprimeNl();
+    imprimeInteira(2147483647 + 1);
+    imprimeNl();
+    imprimeInteira((-2147483647 - 1) * -1);
+    imprimeNl();
+    respost 0;
+]

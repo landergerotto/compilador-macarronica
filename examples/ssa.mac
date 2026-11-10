@@ -1,0 +1,26 @@
+outrafuncao inteira acumula(inteira limite) @
+[
+    inteira i, soma;
+    i receba 0;
+    soma receba 0;
+    durante (i < limite) edai
+    [
+        cond (i < 2) edai
+        [
+            soma receba soma + 1;
+        ]
+        casocontrario edai
+        [
+            soma receba soma + i;
+        ]
+        i receba i + 1;
+    ]
+    respost soma;
+]
+
+inteira principal() @
+[
+    imprimeInteira(acumula(leInteira()));
+    imprimeNl();
+    respost 0;
+]

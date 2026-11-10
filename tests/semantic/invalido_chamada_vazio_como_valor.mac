@@ -1,0 +1,11 @@
+outrafuncao vazio tarefa() @
+[
+    respost;
+]
+
+inteira principal() @
+[
+    inteira valor;
+    valor receba tarefa();
+    respost valor;
+]

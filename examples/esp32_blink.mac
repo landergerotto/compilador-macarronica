@@ -1,0 +1,16 @@
+inteira principal() @
+[
+    pinoModo(2, 1);
+    durante (VER) edai
+    [
+        pinoEscreve(2, VER);
+        imprimePalavra("LED azul GPIO2: ACESO");
+        imprimeNl();
+        espera(1000);
+        pinoEscreve(2, FAL);
+        imprimePalavra("LED azul GPIO2: APAGADO");
+        imprimeNl();
+        espera(1000);
+    ]
+    respost 0;
+]

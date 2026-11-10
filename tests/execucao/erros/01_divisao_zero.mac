@@ -1,0 +1,7 @@
+inteira principal() @
+[
+    inteira divisor;
+    divisor receba 0;
+    imprimeInteira(10 // divisor);
+    respost 0;
+]
