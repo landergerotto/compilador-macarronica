@@ -1,0 +1,21 @@
+# Fim de linha LF no repositorio e na copia de trabalho, em qualquer sistema.
+# Scripts .sh, Makefile e arquivos .esperado precisam de LF para rodar e
+# comparar saidas no Linux/WSL (correcao do PjBL 1/2: "fim de linha CRLF").
+* text=auto eol=lf
+
+# Scripts que so rodam no Windows ficam com CRLF.
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binarios: nunca converter.
+*.bin binary
+*.elf binary
+*.hex binary
+*.uf2 binary
+*.png binary
+*.jpg binary
+*.gif binary
+*.pdf binary
+*.docx binary
+*.mp4 binary
