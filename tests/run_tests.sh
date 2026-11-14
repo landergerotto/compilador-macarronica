@@ -162,7 +162,9 @@ while IFS="$(printf '\t')" read -r relative_path expectation phase category; do
 done < "$test_root/manifest.tsv"
 
 run_source_case 'integration/valido_minimo.mac' aceito '-'
-run_source_case 'lexer/invalido_real_truncado.mac' rejeitado lexica
+for source_path in "$test_root"/lexer/invalido_*.mac; do
+    run_source_case "lexer/$(basename -- "$source_path")" rejeitado lexica
+done
 for source_path in "$test_root"/parser/invalido_*.mac; do
     run_source_case "parser/$(basename -- "$source_path")" rejeitado sintatica
 done
@@ -173,6 +175,11 @@ done
 
 for source_path in "$test_root"/semantic/invalido_*.mac; do
     run_source_case "semantic/$(basename -- "$source_path")" rejeitado semantica
+done
+
+# Casos distribuidos pelo professor (extensao .mcn): todos devem ser aceitos.
+for source_path in "$test_root"/professor/*.mcn; do
+    run_source_case "professor/$(basename -- "$source_path")" aceito '-'
 done
 
 precedence_source="$test_root/parser/valido_precedencia_condicao.mac"
@@ -211,6 +218,25 @@ if [ "$status" -eq 1 ] && grep -q ': sintatico E-SIN-009:' "$temporary_dir/deep.
     record_pass 'parser limita profundidade de blocos'
 else
     record_failure 'parser limita profundidade de blocos' \
+        "esperava codigo 1 e E-SIN-009, recebeu $status"
+fi
+
+chain_source="$temporary_dir/cadeia_operadores.mac"
+{
+    printf 'vazio principal() @\n[\n    inteira x;\n    x receba 1'
+    link=0
+    while [ "$link" -le 512 ]; do
+        printf '+1'
+        link=$((link + 1))
+    done
+    printf ';\n    respost;\n]\n'
+} > "$chain_source"
+run_compiler "$chain_source" >"$temporary_dir/chain.txt" 2>"$temporary_dir/chain.err"
+status=$?
+if [ "$status" -eq 1 ] && grep -q ': sintatico E-SIN-009:' "$temporary_dir/chain.err"; then
+    record_pass 'parser limita cadeia de operadores'
+else
+    record_failure 'parser limita cadeia de operadores' \
         "esperava codigo 1 e E-SIN-009, recebeu $status"
 fi
 

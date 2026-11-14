@@ -28,7 +28,9 @@ static int has_mac_extension(const char *path)
         return 0;
     }
     length = strlen(path);
-    return length >= 4U && strcmp(path + length - 4U, ".mac") == 0;
+    /* .mac e a extensao do grupo; .mcn, a dos casos de teste do professor. */
+    return length >= 4U && (strcmp(path + length - 4U, ".mac") == 0 ||
+                            strcmp(path + length - 4U, ".mcn") == 0);
 }
 
 int main(int argc, char **argv)
@@ -101,7 +103,7 @@ int main(int argc, char **argv)
         return COMPILER_EXIT_USAGE_ERROR;
     }
     if (!has_mac_extension(input_path)) {
-        (void)fprintf(stderr, "erro: o arquivo deve ter extensao .mac: %s\n", input_path);
+        (void)fprintf(stderr, "erro: o arquivo deve ter extensao .mac ou .mcn: %s\n", input_path);
         return COMPILER_EXIT_USAGE_ERROR;
     }
     if (options.output_path != NULL && strcmp(input_path, options.output_path) == 0) {

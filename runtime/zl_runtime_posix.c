@@ -33,9 +33,19 @@ void zl_erro_execucao(int32_t codigo, int32_t linha)
     exit(EXIT_FAILURE);
 }
 
-void zl_imprime_int(int32_t valor)
+/* Conversao decimal manual: nao depende de %lld/PRId64 na libc do alvo
+ * (msvcrt no MinGW, newlib-nano em placas). */
+void zl_imprime_int(int64_t valor)
 {
-    (void)printf("%" PRId32, valor);
+    char digitos[20];
+    size_t total = 0U;
+    uint64_t magnitude = valor < 0 ? UINT64_C(0) - (uint64_t)valor : (uint64_t)valor;
+    do {
+        digitos[total++] = (char)('0' + (int)(magnitude % 10U));
+        magnitude /= 10U;
+    } while (magnitude != 0U);
+    if (valor < 0) (void)fputc('-', stdout);
+    while (total > 0U) (void)fputc(digitos[--total], stdout);
 }
 
 void zl_imprime_flut(float valor)
@@ -94,19 +104,24 @@ static void le_token(char *buffer, size_t capacidade, int32_t linha)
     }
 }
 
-int32_t zl_le_int(int32_t linha)
+int64_t zl_le_int(int32_t linha)
 {
     char token[256];
     char *fim;
     intmax_t valor;
+    int fora_da_faixa;
     le_token(token, sizeof(token), linha);
     errno = 0;
     valor = strtoimax(token, &fim, 10);
-    if (fim == token || *fim != '\0' || errno == ERANGE ||
-        valor < INT32_MIN || valor > INT32_MAX) {
+    fora_da_faixa = errno == ERANGE;
+#if INTMAX_MAX > INT64_MAX
+    /* Onde intmax_t passa de 64 bits, ERANGE nao cobre a faixa de inteira. */
+    if (valor < INT64_MIN || valor > INT64_MAX) fora_da_faixa = 1;
+#endif
+    if (fim == token || *fim != '\0' || fora_da_faixa) {
         zl_erro_execucao(ZL_ERRO_ENTRADA, linha);
     }
-    return (int32_t)valor;
+    return (int64_t)valor;
 }
 
 /* Aceita notacao decimal de entrada, inclusive expoente; rejeita hexadecimal,
@@ -167,26 +182,24 @@ int32_t zl_texto_igual(const char *esquerda, const char *direita)
                   direita != NULL ? direita : "") == 0 ? 1 : 0;
 }
 
-int32_t zl_potencia_int(int32_t base, int32_t expoente, int32_t linha)
+int64_t zl_potencia_int(int64_t base, int64_t expoente, int32_t linha)
 {
-    uint32_t resultado = UINT32_C(1);
-    uint32_t fator = (uint32_t)base;
-    uint32_t restante;
+    uint64_t resultado = UINT64_C(1);
+    uint64_t fator = (uint64_t)base;
+    uint64_t restante;
     if (expoente < 0) {
         zl_erro_execucao(ZL_ERRO_EXPOENTE, linha);
     }
-    restante = (uint32_t)expoente;
-    /* O produto cabe em uint64_t; a conversao reduz modulo 2^32 em C99. */
+    restante = (uint64_t)expoente;
+    /* Aritmetica sem sinal: reduz modulo 2^64 sem overflow assinado em C. */
     while (restante != 0U) {
-        if ((restante & UINT32_C(1)) != 0U) {
-            resultado = (uint32_t)((uint64_t)resultado * fator);
-        }
+        if ((restante & UINT64_C(1)) != 0U) resultado *= fator;
         restante >>= 1U;
-        if (restante != 0U) fator = (uint32_t)((uint64_t)fator * fator);
+        if (restante != 0U) fator *= fator;
     }
     /* Evita conversao unsigned -> signed fora da faixa, dependente de C. */
-    if (resultado <= INT32_MAX) return (int32_t)resultado;
-    return -INT32_C(1) - (int32_t)(UINT32_MAX - resultado);
+    if (resultado <= (uint64_t)INT64_MAX) return (int64_t)resultado;
+    return -INT64_C(1) - (int64_t)(UINT64_MAX - resultado);
 }
 
 float zl_potencia_flut(float base, float expoente, int32_t linha)

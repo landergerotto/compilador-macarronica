@@ -1,0 +1,27 @@
+inteira principal() @
+[
+    inteira cpf, limite, maximo, minimo;
+    inteira vet{3} digitos;
+    cpf receba 12345678901;
+    imprimeInteira(cpf);
+    imprimeNl();
+    limite receba 2147483647;
+    imprimeInteira(limite + 1);
+    imprimeNl();
+    imprimeInteira(100000 * 100000);
+    imprimeNl();
+    imprimeInteira(cpf // 100);
+    imprimeNl();
+    imprimeInteira(2 ^ 62);
+    imprimeNl();
+    maximo receba 9223372036854775807;
+    imprimeInteira(maximo + 1);
+    imprimeNl();
+    minimo receba -9223372036854775807 - 1;
+    imprimeInteira(-minimo);
+    imprimeNl();
+    digitos{cpf // 10000000000} receba cpf - 12345678900;
+    imprimeInteira(digitos{1});
+    imprimeNl();
+    respost 0;
+]

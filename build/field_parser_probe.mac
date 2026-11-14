@@ -1,1 +1,0 @@
-registro Interno @ [ inteira n; ] registro Externo @ [ Interno interno; ] outrafuncao Externo cria() @ [ Externo x; respost x; ] inteira principal() @ [ Externo vet{2} v; Externo x; x.interno.n receba 1; v{0}.interno.n receba x.interno.n; respost cria().interno.n; ]

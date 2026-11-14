@@ -493,10 +493,14 @@ static size_t analyze_call(SemanticAnalyzer *analyzer, AstNode *node,
     return function->type_id;
 }
 
-/* Mesma aritmetica modular i32 da IR, sem overflow assinado em C. */
-static long long integer_from_bits(uint32_t bits)
+/* Mesma aritmetica modular i64 da IR (inteira = i64), sem overflow assinado
+ * em C: as contas sao feitas em uint64_t e convertidas de volta em
+ * complemento de dois sem depender de comportamento definido pela
+ * implementacao. */
+static long long integer_from_bits(uint64_t bits)
 {
-    return bits <= INT32_MAX ? (long long)bits : (long long)bits - 4294967296LL;
+    if (bits <= (uint64_t)LLONG_MAX) return (long long)bits;
+    return -(long long)(~bits) - 1LL;
 }
 
 static int evaluate_integer_constant(const AstNode *node, long long *result)
@@ -521,7 +525,7 @@ static int evaluate_integer_constant(const AstNode *node, long long *result)
             return 1;
         }
         if (node->as.unary_expr.operator_kind == AST_OP_UNARY_MINUS) {
-            *result = integer_from_bits((uint32_t)(0U - (uint32_t)left));
+            *result = integer_from_bits((uint64_t)0U - (uint64_t)left);
             return 1;
         }
         return 0;
@@ -533,33 +537,28 @@ static int evaluate_integer_constant(const AstNode *node, long long *result)
     }
     switch (node->as.binary_expr.operator_kind) {
     case AST_OP_ADD:
-        *result = integer_from_bits((uint32_t)((uint64_t)(uint32_t)left +
-                                               (uint32_t)right));
+        *result = integer_from_bits((uint64_t)left + (uint64_t)right);
         return 1;
     case AST_OP_SUBTRACT:
-        *result = integer_from_bits((uint32_t)((uint64_t)(uint32_t)left -
-                                               (uint32_t)right));
+        *result = integer_from_bits((uint64_t)left - (uint64_t)right);
         return 1;
     case AST_OP_MULTIPLY:
-        *result = integer_from_bits((uint32_t)((uint64_t)(uint32_t)left *
-                                               (uint32_t)right));
+        *result = integer_from_bits((uint64_t)left * (uint64_t)right);
         return 1;
     case AST_OP_INTEGER_DIVIDE:
-        if (right == 0 || (left == INT32_MIN && right == -1)) return 0;
+        if (right == 0 || (left == LLONG_MIN && right == -1)) return 0;
         *result = left / right;
         return 1;
     case AST_OP_POWER:
         if (right < 0) return 0;
         {
             unsigned long long exponent = (unsigned long long)right;
-            uint32_t power = (uint32_t)left;
-            uint32_t value = 1U;
+            uint64_t power = (uint64_t)left;
+            uint64_t value = 1U;
             while (exponent != 0U) {
-                if ((exponent & 1U) != 0U)
-                    value = (uint32_t)((uint64_t)value * power);
+                if ((exponent & 1U) != 0U) value *= power;
                 exponent >>= 1U;
-                if (exponent != 0U)
-                    power = (uint32_t)((uint64_t)power * power);
+                if (exponent != 0U) power *= power;
             }
             *result = integer_from_bits(value);
             return 1;
@@ -773,17 +772,8 @@ static size_t analyze_unary(SemanticAnalyzer *analyzer, AstNode *node)
     size_t operand;
     size_t result_type;
     int valid = 0;
-    /* O lexer guarda a magnitude; somente este contexto admite 2147483648. */
-    if (node->as.unary_expr.operator_kind == AST_OP_UNARY_MINUS &&
-        operand_node != NULL && operand_node->kind == AST_LITERAL_EXPR &&
-        operand_node->as.literal_expr.literal_kind == AST_LITERAL_INTEGER &&
-        operand_node->as.literal_expr.value.integer == 2147483648LL) {
-        annotate(operand_node, TYPE_ID_INTEGER, SYMBOL_ID_NONE,
-                 AST_SEMANTIC_RVALUE | AST_SEMANTIC_CONSTANT);
-        operand = TYPE_ID_INTEGER;
-    } else {
-        operand = analyze_expression(analyzer, operand_node, 0);
-    }
+    /* O lexer ja limita a magnitude a INT64_MAX, que cabe em inteira (i64). */
+    operand = analyze_expression(analyzer, operand_node, 0);
     result_type = operand;
     if (operand == TYPE_ID_ERROR) {
         annotate(node, TYPE_ID_ERROR, SYMBOL_ID_NONE, AST_SEMANTIC_ERROR);
@@ -831,13 +821,9 @@ static size_t analyze_expression(SemanticAnalyzer *analyzer, AstNode *node,
     case AST_LITERAL_EXPR:
         switch (node->as.literal_expr.literal_kind) {
         case AST_LITERAL_INTEGER:
+            /* inteira = i64: o lexer rejeita magnitudes acima de INT64_MAX
+             * (E-LEX-006), entao todo literal aceito cabe no tipo. */
             type_id = TYPE_ID_INTEGER;
-            if (node->as.literal_expr.value.integer < INT32_MIN ||
-                node->as.literal_expr.value.integer > INT32_MAX) {
-                semantic_error(analyzer, node->span, "E-SEM-037",
-                               "literal inteira fora da faixa de 32 bits");
-                type_id = TYPE_ID_ERROR;
-            }
             break;
         case AST_LITERAL_REAL:
             type_id = TYPE_ID_FLOAT;
@@ -1155,7 +1141,10 @@ static void validate_record_cycles(SemanticAnalyzer *analyzer, SourceSpan span)
     free(color);
 }
 
-/* Lacos nao garantem retorno, pois o corpo pode nao ser executado. */
+/*
+ * `durante` e `repete` nunca contam como retorno garantido: a condicao pode ser
+ * falsa na primeira avaliacao e o corpo executar zero vezes.
+ */
 static int block_always_returns(const AstNode *block);
 
 static int statement_always_returns(const AstNode *node)

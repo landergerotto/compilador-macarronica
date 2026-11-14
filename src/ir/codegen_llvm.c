@@ -23,6 +23,7 @@ typedef struct {
     size_t temporary;
     size_t label;
     int terminated;
+    size_t last_line;
     char current_block[64];
 } Codegen;
 
@@ -57,7 +58,7 @@ static void emit_type(Codegen *gen, size_t type_id)
     }
     switch (type->kind) {
     case TYPE_BOOL: write_ir(gen, "i1"); break;
-    case TYPE_INTEGER: write_ir(gen, "i32"); break;
+    case TYPE_INTEGER: write_ir(gen, "i64"); break;
     case TYPE_FLOAT: write_ir(gen, "float"); break;
     case TYPE_DOUBLE: write_ir(gen, "double"); break;
     case TYPE_WORD: write_ir(gen, "ptr"); break;
@@ -89,18 +90,78 @@ static LlvmValue new_temporary(Codegen *gen, size_t type_id)
     return value;
 }
 
+/*
+ * Esquema de nomes locais (IDENT da Macaronica e [A-Za-z][A-Za-z0-9]*, sem
+ * ponto), escolhido para nunca colidir:
+ *   %nome.N        temporario derivado da fonte (load, resultado de chamada);
+ *                  N vem do mesmo contador de %t.N, logo e unico;
+ *   %nome.addr     slot do alloca (%nome.ID.addr se o nome se repete na funcao);
+ *   %nome          valor recebido pelo parametro;
+ *   a.b.N / entry  rotulos de bloco: sempre duas palavras antes do numero.
+ */
+static LlvmValue new_named_temporary(Codegen *gen, size_t type_id, const char *base)
+{
+    LlvmValue value = value_empty(type_id);
+    int length = snprintf(value.operand, sizeof(value.operand), "%%%s.%zu",
+                          base, gen->temporary);
+    if (length < 0 || (size_t)length >= sizeof(value.operand))
+        (void)snprintf(value.operand, sizeof(value.operand), "%%t.%zu", gen->temporary);
+    gen->temporary++;
+    return value;
+}
+
 static void emit_typed_value(Codegen *gen, LlvmValue value)
 {
     emit_type(gen, value.type_id);
     write_ir(gen, " %s", value.operand);
 }
 
+/* Dois locais da mesma funcao com o mesmo nome (escopos irmaos) dividem o
+ * entry; so o primeiro fica com %nome.addr. */
+static int local_name_is_shared(const Codegen *gen, const Symbol *symbol)
+{
+    const Scope *scope = symbol_table_get_scope(&gen->semantic->symbols, symbol->scope_id);
+    size_t index;
+    if (scope == NULL) return 1;
+    for (index = 0U; index < gen->semantic->symbols.count; ++index) {
+        const Symbol *other = &gen->semantic->symbols.items[index];
+        const Scope *other_scope;
+        if (other->id >= symbol->id || strcmp(other->name, symbol->name) != 0) continue;
+        other_scope = symbol_table_get_scope(&gen->semantic->symbols, other->scope_id);
+        if (other_scope != NULL && other_scope->kind == SCOPE_FUNCTION &&
+            other_scope->owner_symbol_id == scope->owner_symbol_id) return 1;
+    }
+    return 0;
+}
+
+/* Globais sao internal: @nome nao conflita com simbolos do runtime ou da
+ * placa (setup, loop...) na ligacao. */
 static void symbol_address(Codegen *gen, const Symbol *symbol, char *buffer,
                            size_t capacity)
 {
-    (void)snprintf(buffer, capacity,
-                   symbol->scope_id == gen->semantic->global_scope_id
-                       ? "@mac.global.%zu" : "%%v.%zu.addr", symbol->id);
+    int global = symbol->scope_id == gen->semantic->global_scope_id;
+    int length;
+    if (global) length = snprintf(buffer, capacity, "@%s", symbol->name);
+    else if (local_name_is_shared(gen, symbol))
+        length = snprintf(buffer, capacity, "%%%s.%zu.addr", symbol->name, symbol->id);
+    else length = snprintf(buffer, capacity, "%%%s.addr", symbol->name);
+    /* Nome longo demais para o operando: volta ao nome numerico, sempre unico. */
+    if (length < 0 || (size_t)length >= capacity)
+        (void)snprintf(buffer, capacity, global ? "@mac.global.%zu" : "%%v.%zu.addr",
+                       symbol->id);
+}
+
+static void parameter_value_name(const Symbol *symbol, size_t index, char *buffer,
+                                 size_t capacity)
+{
+    int length = -1;
+    /* "entry" e o unico nome simples que colide com um rotulo. */
+    if (symbol != NULL && strcmp(symbol->name, "entry") == 0)
+        length = snprintf(buffer, capacity, "%%%s.arg", symbol->name);
+    else if (symbol != NULL)
+        length = snprintf(buffer, capacity, "%%%s", symbol->name);
+    if (length < 0 || (size_t)length >= capacity)
+        (void)snprintf(buffer, capacity, "%%param.arg.%zu", index);
 }
 
 static void emit_function_name(Codegen *gen, const Symbol *function)
@@ -116,15 +177,15 @@ static void emit_label(Codegen *gen, const char *prefix, size_t number)
     gen->terminated = 0;
 }
 
-/* Guardas abrem dois blocos: erro termina; somente continua chega a operacao. */
+/* Guardas abrem dois blocos: guarda.erro termina; so guarda.ok chega a operacao. */
 static void emit_guard(Codegen *gen, LlvmValue bad, int code, size_t line)
 {
     size_t label = gen->label++;
-    write_ir(gen, "  br i1 %s, label %%erro.%zu, label %%continua.%zu\n",
+    write_ir(gen, "  br i1 %s, label %%guarda.erro.%zu, label %%guarda.ok.%zu\n",
              bad.operand, label, label);
-    emit_label(gen, "erro", label);
+    emit_label(gen, "guarda.erro", label);
     write_ir(gen, "  call void @zl_erro_execucao(i32 %d, i32 %zu)\n  unreachable\n", code, line);
-    emit_label(gen, "continua", label);
+    emit_label(gen, "guarda.ok", label);
 }
 
 static LlvmValue emit_expression(Codegen *gen, const AstNode *node);
@@ -158,15 +219,21 @@ static LlvmValue emit_address(Codegen *gen, const AstNode *node)
             fail(gen, node, "E-IR-002", "indice sem tipo de vetor valido");
             return address;
         }
-        write_ir(gen, "  %s = icmp slt i32 %s, 0\n", low.operand, index.operand);
-        write_ir(gen, "  %s = icmp sge i32 %s, %lld\n", high.operand,
+        write_ir(gen, "  %s = icmp slt i64 %s, 0\n", low.operand, index.operand);
+        write_ir(gen, "  %s = icmp sge i64 %s, %lld\n", high.operand,
                  index.operand, type->array_size);
         write_ir(gen, "  %s = or i1 %s, %s\n", bad.operand, low.operand, high.operand);
         emit_guard(gen, bad, 3, node->span.start.line);
-        address = new_temporary(gen, node->semantic.type_id);
-        write_ir(gen, "  %s = getelementptr ", address.operand);
-        emit_type(gen, type->id);
-        write_ir(gen, ", ptr %s, i32 0, i32 %s\n", base.operand, index.operand);
+        {
+            /* Depois da guarda, 0 <= indice < tamanho <= INT32_MAX: o trunc e
+             * exato e a GEP continua com indices i32 em qualquer alvo. */
+            LlvmValue narrow = new_temporary(gen, TYPE_ID_INTEGER);
+            write_ir(gen, "  %s = trunc i64 %s to i32\n", narrow.operand, index.operand);
+            address = new_temporary(gen, node->semantic.type_id);
+            write_ir(gen, "  %s = getelementptr ", address.operand);
+            emit_type(gen, type->id);
+            write_ir(gen, ", ptr %s, i32 0, i32 %s\n", base.operand, narrow.operand);
+        }
         return address;
     }
     case AST_FIELD_EXPR:
@@ -256,13 +323,17 @@ static LlvmValue emit_call(Codegen *gen, const AstNode *node)
         values[index] = convert_value(gen, values[index], function->parameter_type_ids[index], node);
     }
     if (function->builtin_kind == BUILTIN_PRINT_BOOL) {
+        /* bool vai como i32 0/1: a ABI do runtime nao depende de zeroext e
+         * nao acompanha a largura de inteira (i64). */
         LlvmValue widened = new_temporary(gen, TYPE_ID_INTEGER);
         write_ir(gen, "  %s = zext i1 %s to i32\n", widened.operand, values[0].operand);
-        values[0] = widened;
+        write_ir(gen, "  call void @zl_imprime_bool(i32 %s)\n", widened.operand);
+        free(values);
+        return result;
     }
     if (result.type_id == TYPE_ID_VOID) write_ir(gen, "  call void ");
     else {
-        result = new_temporary(gen, result.type_id);
+        result = new_named_temporary(gen, result.type_id, function->name);
         write_ir(gen, "  %s = call ", result.operand);
         emit_type(gen, result.type_id);
         write_ir(gen, " ");
@@ -346,8 +417,8 @@ static LlvmValue emit_binary(Codegen *gen, const AstNode *node)
             LlvmValue minimum = new_temporary(gen, TYPE_ID_BOOL);
             LlvmValue negative_one = new_temporary(gen, TYPE_ID_BOOL);
             LlvmValue overflow = new_temporary(gen, TYPE_ID_BOOL);
-            write_ir(gen, "  %s = icmp eq i32 %s, -2147483648\n", minimum.operand, left.operand);
-            write_ir(gen, "  %s = icmp eq i32 %s, -1\n", negative_one.operand, right.operand);
+            write_ir(gen, "  %s = icmp eq i64 %s, -9223372036854775808\n", minimum.operand, left.operand);
+            write_ir(gen, "  %s = icmp eq i64 %s, -1\n", negative_one.operand, right.operand);
             write_ir(gen, "  %s = and i1 %s, %s\n", overflow.operand, minimum.operand, negative_one.operand);
             emit_guard(gen, overflow, 2, node->span.start.line);
         }
@@ -377,20 +448,13 @@ static LlvmValue emit_unary(Codegen *gen, const AstNode *node)
     const AstNode *operand = node->as.unary_expr.operand;
     LlvmValue value;
     LlvmValue result;
-    if (op == AST_OP_UNARY_MINUS && operand->kind == AST_LITERAL_EXPR &&
-        operand->as.literal_expr.literal_kind == AST_LITERAL_INTEGER &&
-        operand->as.literal_expr.value.integer == 2147483648LL) {
-        result = value_empty(TYPE_ID_INTEGER);
-        (void)strcpy(result.operand, "-2147483648");
-        return result;
-    }
     value = emit_expression(gen, operand);
     if (op == AST_OP_UNARY_PLUS) return value;
     result = new_temporary(gen, node->semantic.type_id);
     if (op == AST_OP_LOGICAL_NOT) {
         write_ir(gen, "  %s = xor i1 %s, true\n", result.operand, value.operand);
     } else if (op == AST_OP_UNARY_MINUS && value.type_id == TYPE_ID_INTEGER) {
-        write_ir(gen, "  %s = sub i32 0, %s\n", result.operand, value.operand);
+        write_ir(gen, "  %s = sub i64 0, %s\n", result.operand, value.operand);
     } else if (op == AST_OP_UNARY_MINUS) {
         write_ir(gen, "  %s = fneg ", result.operand);
         emit_typed_value(gen, value);
@@ -445,7 +509,7 @@ static LlvmValue emit_expression(Codegen *gen, const AstNode *node)
             break;
         }
         symbol_address(gen, symbol, address, sizeof(address));
-        value = new_temporary(gen, node->semantic.type_id);
+        value = new_named_temporary(gen, node->semantic.type_id, symbol->name);
         write_ir(gen, "  %s = load ", value.operand);
         emit_type(gen, value.type_id);
         write_ir(gen, ", ptr %s\n", address);
@@ -568,7 +632,12 @@ static void emit_statement(Codegen *gen, const AstNode *node)
 {
     size_t index;
     if (gen->status != FRONTEND_STATUS_OK || gen->terminated) return;
-    write_ir(gen, "  ; linha %zu\n", node->span.start.line);
+    /* Um comentario por linha de origem; blocos e declaracoes nao geram codigo. */
+    if (node->kind != AST_BLOCK && node->kind != AST_VAR_DECL &&
+        node->kind != AST_VECTOR_DECL && node->span.start.line != gen->last_line) {
+        write_ir(gen, "  ; linha %zu\n", node->span.start.line);
+        gen->last_line = node->span.start.line;
+    }
     switch (node->kind) {
     case AST_BLOCK:
         for (index = 0U; index < node->as.block.statements.count; ++index)
@@ -595,9 +664,17 @@ static void emit_statement(Codegen *gen, const AstNode *node)
         if (node->as.return_stmt.value != NULL) {
             LlvmValue value = emit_expression(gen, node->as.return_stmt.value);
             value = convert_value(gen, value, gen->function->as.function_decl.return_type.resolved_type_id, node);
-            write_ir(gen, "  ret ");
-            emit_typed_value(gen, value);
-            write_ir(gen, "\n");
+            if (gen->function->as.function_decl.is_principal) {
+                /* zl_principal mantem a ABI i32 com o runtime: o status do
+                 * processo recebe os 32 bits baixos do valor inteira (i64). */
+                LlvmValue status = new_temporary(gen, TYPE_ID_INTEGER);
+                write_ir(gen, "  %s = trunc i64 %s to i32\n  ret i32 %s\n",
+                         status.operand, value.operand, status.operand);
+            } else {
+                write_ir(gen, "  ret ");
+                emit_typed_value(gen, value);
+                write_ir(gen, "\n");
+            }
         } else write_ir(gen, gen->function->as.function_decl.is_principal ? "  ret i32 0\n" : "  ret void\n");
         gen->terminated = 1;
         break;
@@ -701,7 +778,9 @@ static void emit_globals(Codegen *gen)
         const Symbol *symbol = &gen->semantic->symbols.items[index];
         if (symbol->scope_id != gen->semantic->global_scope_id ||
             (symbol->category != SYMBOL_GLOBAL_VARIABLE && symbol->category != SYMBOL_VECTOR)) continue;
-        write_ir(gen, "; global %s\n@mac.global.%zu = global ", symbol->name, symbol->id);
+        char name[64];
+        symbol_address(gen, symbol, name, sizeof(name));
+        write_ir(gen, "%s = internal global ", name);
         emit_type(gen, symbol->type_id);
         write_ir(gen, " zeroinitializer\n");
     }
@@ -710,18 +789,18 @@ static void emit_globals(Codegen *gen)
 static void emit_runtime_declarations(Codegen *gen)
 {
     write_ir(gen,
-        "declare void @zl_imprime_int(i32) nounwind\n"
+        "declare void @zl_imprime_int(i64) nounwind\n"
         "declare void @zl_imprime_flut(float) nounwind\n"
         "declare void @zl_imprime_duplocarpado(double) nounwind\n"
         "declare void @zl_imprime_texto(ptr) nounwind\n"
         "declare void @zl_imprime_bool(i32) nounwind\n"
         "declare void @zl_imprime_nl() nounwind\n"
-        "declare i32 @zl_le_int(i32) nounwind\n"
+        "declare i64 @zl_le_int(i32) nounwind\n"
         "declare float @zl_le_flut(i32) nounwind\n"
         "declare double @zl_le_duplocarpado(i32) nounwind\n"
         "declare i32 @zl_texto_igual(ptr, ptr) nounwind\n"
         "declare void @zl_erro_execucao(i32, i32) noreturn nounwind\n"
-        "declare i32 @zl_potencia_int(i32, i32, i32) nounwind\n"
+        "declare i64 @zl_potencia_int(i64, i64, i32) nounwind\n"
         "declare float @zl_potencia_flut(float, float, i32) nounwind\n"
         "declare double @zl_potencia_duplocarpado(double, double, i32) nounwind\n"
         "declare float @zl_raiz_flut(float, i32) nounwind\n"
@@ -736,21 +815,27 @@ static void emit_function(Codegen *gen, const AstNode *function)
     gen->temporary = 0U;
     gen->label = 0U;
     gen->terminated = 0;
+    gen->last_line = 0U;
     (void)strcpy(gen->current_block, "entry");
     if (symbol == NULL) {
         fail(gen, function, "E-IR-002", "funcao sem simbolo resolvido");
         return;
     }
     write_ir(gen, "define ");
-    emit_type(gen, symbol->is_principal ? TYPE_ID_INTEGER : symbol->type_id);
+    if (symbol->is_principal) write_ir(gen, "i32");
+    else emit_type(gen, symbol->type_id);
     write_ir(gen, " ");
     emit_function_name(gen, symbol);
     write_ir(gen, "(");
     for (index = 0U; index < function->as.function_decl.parameters.count; ++index) {
         const AstNode *parameter = function->as.function_decl.parameters.items[index];
+        char value_name[64];
+        parameter_value_name(symbol_table_get(&gen->semantic->symbols,
+                                              parameter->as.var_decl.names.items[0].symbol_id),
+                             index, value_name, sizeof(value_name));
         if (index != 0U) write_ir(gen, ", ");
         emit_type(gen, parameter->as.var_decl.type.resolved_type_id);
-        write_ir(gen, " %%arg.%zu", index);
+        write_ir(gen, " %s", value_name);
     }
     write_ir(gen, ") nounwind {\nentry:\n");
     /* Locais de qualquer ramo pertencem a funcao: todos nascem no entry. */
@@ -760,7 +845,9 @@ static void emit_function(Codegen *gen, const AstNode *function)
         if (scope == NULL || scope->kind != SCOPE_FUNCTION || scope->owner_symbol_id != symbol->id) continue;
         if (local->category != SYMBOL_LOCAL_VARIABLE && local->category != SYMBOL_PARAMETER &&
             local->category != SYMBOL_VECTOR) continue;
-        write_ir(gen, "  ; %s\n  %%v.%zu.addr = alloca ", local->name, local->id);
+        char slot[64];
+        symbol_address(gen, local, slot, sizeof(slot));
+        write_ir(gen, "  %s = alloca ", slot);
         emit_type(gen, local->type_id);
         write_ir(gen, "\n");
     }
@@ -769,15 +856,26 @@ static void emit_function(Codegen *gen, const AstNode *function)
         const Scope *scope = symbol_table_get_scope(&gen->semantic->symbols, local->scope_id);
         if (scope == NULL || scope->kind != SCOPE_FUNCTION || scope->owner_symbol_id != symbol->id) continue;
         if (local->category != SYMBOL_LOCAL_VARIABLE && local->category != SYMBOL_VECTOR) continue;
+        char slot[64];
+        symbol_address(gen, local, slot, sizeof(slot));
         write_ir(gen, "  store ");
         emit_type(gen, local->type_id);
-        write_ir(gen, " zeroinitializer, ptr %%v.%zu.addr\n", local->id);
+        write_ir(gen, " zeroinitializer, ptr %s\n", slot);
     }
     for (index = 0U; index < function->as.function_decl.parameters.count; ++index) {
         const AstNode *parameter = function->as.function_decl.parameters.items[index];
+        const Symbol *parameter_symbol = symbol_table_get(
+            &gen->semantic->symbols, parameter->as.var_decl.names.items[0].symbol_id);
+        char value_name[64], slot[64];
+        if (parameter_symbol == NULL) {
+            fail(gen, parameter, "E-IR-002", "parametro sem simbolo resolvido");
+            return;
+        }
+        parameter_value_name(parameter_symbol, index, value_name, sizeof(value_name));
+        symbol_address(gen, parameter_symbol, slot, sizeof(slot));
         write_ir(gen, "  store ");
         emit_type(gen, parameter->as.var_decl.type.resolved_type_id);
-        write_ir(gen, " %%arg.%zu, ptr %%v.%zu.addr\n", index, parameter->as.var_decl.names.items[0].symbol_id);
+        write_ir(gen, " %s, ptr %s\n", value_name, slot);
     }
     emit_statement(gen, function->as.function_decl.body);
     if (!gen->terminated) {

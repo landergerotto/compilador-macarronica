@@ -10,7 +10,7 @@ Não existe uma representação intermediária própria de três endereços.
 | Macaronica | LLVM | Contrato |
 |---|---|---|
 | `bool` | `i1` | `0` é FAL e `1` é VER |
-| `inteira` | `i32` | inteiro assinado de 32 bits |
+| `inteira` | `i64` | inteiro assinado de 64 bits (D-021, revisão do PjBL 3/4) |
 | `flut` | `float` | IEEE 754 binary32 |
 | `duplocarpado` | `double` | IEEE 754 binary64 |
 | `palavra` | `ptr` | texto UTF-8 terminado em zero |
@@ -19,7 +19,8 @@ Não existe uma representação intermediária própria de três endereços.
 | registro | `%struct.nome` | campos por valor na ordem da declaração |
 
 O módulo gerado não contém `target triple` nem `target datalayout`. Endereços
-de vetores/campos usam GEP com índices `i32`, sem offsets manuais. Funções
+de vetores/campos usam GEP com índices `i32`, sem offsets manuais: o índice
+`inteira` é verificado em `i64` e só depois reduzido com `trunc`. Funções
 geradas e declarações de runtime usam `nounwind`. Não há chamadas variádicas
 nem chamadas diretas a `printf`/`scanf` na IR do programa.
 
@@ -28,6 +29,25 @@ hospedeiro. Essa especialização ocorre somente ao ligar/executar o programa;
 o `.ll` original permanece independente da plataforma. O PjBL 4 deve preservar
 o significado de `double`, mesmo quando uma placa exigir implementação em
 software. Nenhuma placa, ISA ou ABI de placa é escolhida nesta etapa.
+
+## Nomes na IR
+
+A IR é escrita para ser lida. Os nomes derivam da fonte e não colidem entre si,
+porque um `IDENT` da Macaronica não contém ponto:
+
+| Forma | Uso | Exemplo |
+|---|---|---|
+| `@nome` | global (`internal`, não conflita com símbolos do runtime ou da placa) | `@chamadas` |
+| `@mac.nome` | função do programa | `@mac.fatorial` |
+| `%nome.addr` | `alloca` de local ou parâmetro | `%contador.addr` |
+| `%nome` | valor recebido pelo parâmetro | `%n` |
+| `%nome.N` | `load` de variável ou resultado de chamada | `%n.2`, `%fatorial.7` |
+| `%t.N` | demais temporários | `%t.3 = icmp slt i64 %n.2, 2` |
+| `a.b.N` | rótulos de bloco (`if.then.1`, `guarda.erro.0`) | `loop.body.4` |
+
+`N` vem de um único contador por função. Um parâmetro chamado `entry` recebe o
+sufixo `.arg`, pois esse é o único nome simples de rótulo. Antes do primeiro
+comando de cada linha de origem, o gerador escreve `; linha N` uma vez.
 
 ## Memória, valores e conversões
 
@@ -46,7 +66,7 @@ nominais e sem ciclos por valor; vetores completos não são valores de fonte.
 
 As únicas promoções são `inteira -> flut`, `inteira -> duplocarpado` e
 `flut -> duplocarpado`, em atribuições, argumentos e retornos. O codegen emite
-`sitofp i32 ... to float`, `sitofp i32 ... to double` e `fpext float ... to
+`sitofp i64 ... to float`, `sitofp i64 ... to double` e `fpext float ... to
 double`, respectivamente. A conversão para double a partir de inteira é
 direta. Não há narrowing, cast de fonte nem promoção de operandos binários.
 
@@ -58,10 +78,10 @@ e usa `xor i1`. Condicionais e laços formam um CFG com um terminador por bloco.
 Depois, `mem2reg` pode promover os locais elegíveis para SSA e inserir `phi`.
 
 `/` aceita somente dois `flut` ou dois `duplocarpado`, e emite `fdiv` após
-guarda para divisor zero, inclusive zero negativo. `//` emite `sdiv i32`,
-truncando em direção a zero, após guardas contra zero e `INT32_MIN / -1`.
+guarda para divisor zero, inclusive zero negativo. `//` emite `sdiv i64`,
+truncando em direção a zero, após guardas contra zero e `INT64_MIN / -1`.
 Soma, subtração, multiplicação, menos unário e potência inteira são modulares
-em 32 bits; a IR não usa `nsw`/`nuw`. Potência inteira usa exponenciação por
+em 64 bits; a IR não usa `nsw`/`nuw`. Potência inteira usa exponenciação por
 quadrados no runtime e rejeita expoente negativo. `0 ^ 0` é 1.
 
 Potências reais usam `powf`/`pow`; raízes usam `sqrtf`/`sqrt` via runtime.
@@ -76,13 +96,13 @@ também quando houver NaN. O frontend já exige operandos de tipos iguais.
 
 | Função Macaronica | Símbolo LLVM/C | Assinatura LLVM |
 |---|---|---|
-| `imprimeInteira` | `zl_imprime_int` | `void (i32)` |
+| `imprimeInteira` | `zl_imprime_int` | `void (i64)` |
 | `imprimeFlut` | `zl_imprime_flut` | `void (float)` |
 | `imprimeDuplocarpado` | `zl_imprime_duplocarpado` | `void (double)` |
 | `imprimePalavra` | `zl_imprime_texto` | `void (ptr)` |
 | `imprimeBool` | `zl_imprime_bool` | `void (i32)` |
 | `imprimeNl` | `zl_imprime_nl` | `void ()` |
-| `leInteira` | `zl_le_int` | `i32 (i32 linha)` |
+| `leInteira` | `zl_le_int` | `i64 (i32 linha)` |
 | `leFlut` | `zl_le_flut` | `float (i32 linha)` |
 | `leDuplocarpado` | `zl_le_duplocarpado` | `double (i32 linha)` |
 
@@ -96,7 +116,7 @@ Os demais auxiliares são:
 
 ```llvm
 declare void @zl_erro_execucao(i32, i32) noreturn nounwind
-declare i32 @zl_potencia_int(i32, i32, i32) nounwind
+declare i64 @zl_potencia_int(i64, i64, i32) nounwind
 declare float @zl_potencia_flut(float, float, i32) nounwind
 declare double @zl_potencia_duplocarpado(double, double, i32) nounwind
 declare float @zl_raiz_flut(float, i32) nounwind
@@ -120,7 +140,8 @@ termina com `unreachable`.
 O diagnóstico usa `linha N: erro de execucao C: mensagem` em `stderr` e status
 de falha. O gerador faz as guardas de divisão e índice antes da operação.
 
-Inteiros são impressos em decimal assinado; `flut` com `%.9g`,
+Inteiros são impressos em decimal assinado, por conversão manual (sem
+depender de `%lld`/`PRId64` na libc do alvo); `flut` com `%.9g`,
 `duplocarpado` com `%.17g`, bool como `VER`/`FAL` e texto sem transformação.
 Somente `imprimeNl` acrescenta nova linha. O processo começa com a locale C,
 portanto usa ponto decimal. A leitura consome tokens separados por espaços;
@@ -132,7 +153,8 @@ rejeitado. Essas regras de `stdin` não ampliam os literais da linguagem.
 ## Entrada e retorno
 
 `inteira principal()` e `vazio principal()` são normalizadas para
-`define i32 @zl_principal() nounwind`. A primeira devolve o valor de `respost`;
+`define i32 @zl_principal() nounwind`. A primeira devolve o valor de `respost`
+reduzido a 32 bits (`trunc i64 ... to i32`);
 a segunda devolve zero ao executar `respost;` ou chegar ao fim. Demais funções
 `vazio` usam `ret void`. `main` pertence ao runtime POSIX, chama `zl_principal`
 e devolve seu resultado. O sistema hospedeiro determina quantos bits do status
