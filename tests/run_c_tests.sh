@@ -1,5 +1,6 @@
 #!/bin/sh
-# C gerado no host e contrato de blink. Nao comprova LED fisico.
+# Rota C (back-end da placa) executada no PC: gera C99 com --emit-c, liga com o
+# runtime POSIX e compara a saida com o .esperado. Nao comprova LED fisico.
 set -u
 compiler=${1:-build/debug/macaronica}
 test_cc=${2:-${CC:-gcc}}
@@ -20,21 +21,48 @@ fail() { failed=$((failed + 1)); printf 'FALHA C99 %s\n' "$1" >&2; }
 run() {
     if [ -x /usr/bin/timeout ]; then /usr/bin/timeout 10 "$@"; else "$@"; fi
 }
+# Compila com nova tentativa. No Windows o executavel recem-escrito pode ficar
+# preso por instantes (antivirus ou processo anterior) e o ld falha com
+# "reopening ...: Permission denied"; so esse erro e repetido, ate 5 vezes.
+compile_c() {
+    saida=$1
+    shift
+    tentativa=1
+    while :; do
+        if "$test_cc" -std=c99 -Wall -Wextra -pedantic "-I$project_root/runtime" \
+            "$@" -o "$saida" >"$tmp/build.out" 2>"$tmp/build.err"; then
+            return 0
+        fi
+        grep -q 'Permission denied' "$tmp/build.err" || return 1
+        [ "$tentativa" -lt 5 ] || return 1
+        tentativa=$((tentativa + 1))
+        sleep 1
+    done
+}
+
+# O runtime POSIX e compilado uma vez; cada teste so gera e liga o seu C.
+if ! compile_c "$tmp/zl_runtime_posix.o" -c "$project_root/runtime/zl_runtime_posix.c"; then
+    cat "$tmp/build.err" >&2
+    printf 'ERRO: runtime POSIX nao compilou\n' >&2
+    exit 1
+fi
+
+# Cada teste tem arquivos com nome proprio ($tmp/<nome>.c e .exe): um
+# executavel ainda preso nunca e reescrito pelo teste seguinte.
 build_host() {
-    "$compiler" --emit-c "$1" -o "$tmp/programa.c" >"$tmp/geracao.out" 2>"$tmp/geracao.err" &&
-    "$test_cc" -std=c99 -Wall -Wextra -pedantic "-I$project_root/runtime" \
-        "$tmp/programa.c" "$project_root/runtime/zl_runtime_posix.c" -lm \
-        -o "$tmp/programa.exe" >"$tmp/build.out" 2>"$tmp/build.err"
+    "$compiler" --emit-c "$1" -o "$tmp/$2.c" >"$tmp/geracao.out" 2>"$tmp/geracao.err" &&
+    compile_c "$tmp/$2.exe" "$tmp/$2.c" "$tmp/zl_runtime_posix.o" -lm
 }
 show_build_errors() { cat "$tmp/geracao.err" "$tmp/build.err" >&2; }
+
 for source in "$test_root"/execucao/*.mac "$test_root"/esp32/ordem_wrap.mac; do
     name=$(basename "$source" .mac)
-    if ! build_host "$source"; then fail "$name geracao/compilacao"; show_build_errors; continue; fi
+    if ! build_host "$source" "$name"; then fail "$name geracao/compilacao"; show_build_errors; continue; fi
     input=${source%.mac}.in
     [ -f "$input" ] || input=/dev/null
     expected_status=0
     [ ! -f "${source%.mac}.status" ] || expected_status=$(tr -d '\r\n' <"${source%.mac}.status")
-    run "$tmp/programa.exe" <"$input" >"$tmp/run.out" 2>"$tmp/run.err"
+    run "$tmp/$name.exe" <"$input" >"$tmp/run.out" 2>"$tmp/run.err"
     status=$?
     tr -d '\r' <"$tmp/run.out" >"$tmp/actual"
     tr -d '\r' <"${source%.mac}.esperado" >"$tmp/expected"
@@ -49,8 +77,8 @@ done
 for source in "$test_root"/execucao/erros/*.mac; do
     name=$(basename "$source" .mac)
     code=$(printf '%s' "$name" | cut -c2)
-    if ! build_host "$source"; then fail "$name geracao/compilacao"; show_build_errors; continue; fi
-    run "$tmp/programa.exe" </dev/null >"$tmp/run.out" 2>"$tmp/run.err"
+    if ! build_host "$source" "erro_$name"; then fail "$name geracao/compilacao"; show_build_errors; continue; fi
+    run "$tmp/erro_$name.exe" </dev/null >"$tmp/run.out" 2>"$tmp/run.err"
     status=$?
     if [ "$status" -eq 1 ] && [ ! -s "$tmp/run.out" ] && grep -Eq "linha [1-9][0-9]*: erro de execucao $code:" "$tmp/run.err"; then
         pass "erro $name"
@@ -72,9 +100,7 @@ else
         cat "$tmp/gpio.err" >&2
     fi
     if "$compiler" --alvo=esp32 "$blink" -o "$tmp/blink.c" >"$tmp/geracao.out" 2>"$tmp/geracao.err" &&
-       "$test_cc" -std=c99 -Wall -Wextra -pedantic "-I$project_root/runtime" \
-           "$tmp/blink.c" "$test_root/esp32/runtime_gpio_stub.c" -lm \
-           -o "$tmp/blink.exe" >"$tmp/build.out" 2>"$tmp/build.err"; then
+       compile_c "$tmp/blink.exe" "$tmp/blink.c" "$test_root/esp32/runtime_gpio_stub.c" -lm; then
         mode_line=$(awk '/^[[:space:]]*pinoModo[(]/ { print NR; exit }' "$blink")
         on_line=$(awk '/^[[:space:]]*pinoEscreve[(].*VER/ { print NR; exit }' "$blink")
         off_line=$(awk '/^[[:space:]]*pinoEscreve[(].*FAL/ { print NR; exit }' "$blink")
