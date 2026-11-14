@@ -1,3 +1,17 @@
+# Compilador Macaronica (LFC, PUCPR 2026.2)
+#
+#   make                  compila o compilador (release, sem mensagens de depuracao)
+#   make debug            build de depuracao (-O0 -g3)
+#   make test             todos os testes: PjBL 1 (front-end), PjBL 3 (LLVM IR),
+#                         rota C da placa no PC e os testes extras de mk/*.mk
+#   make test-frontend    so os testes do PjBL 1
+#   make test-c           so a rota C (back-end da placa) executada no PC
+#   make sanitize         testes com AddressSanitizer e UBSan (Linux/WSL)
+#   make placa PROG=...   executavel para a placa (alvos em mk/placa.mk)
+#
+# Os testes de LLVM IR usam o LLVM 18 (llvm-as, opt, lli, clang). No Linux/WSL a
+# pasta /usr/lib/llvm-18/bin e detectada sozinha; fora dela, defina LLVM_BINDIR.
+
 CC = gcc
 CPPFLAGS = -Isrc
 WARNINGS = -Wall -Wextra -pedantic
@@ -15,43 +29,47 @@ endif
 else
 EXEEXT =
 BASH = bash
+# LLVM/MLIR 18 do apt (pacotes llvm-18, clang-18, mlir-18-tools).
+LLVM_BINDIR ?= $(wildcard /usr/lib/llvm-18/bin)
 endif
+export LLVM_BINDIR
 
-SOURCES = \
-	src/main.c \
-	src/compiler.c \
-	src/common/source.c \
-	src/common/diagnostic.c \
-	src/lexer/token.c \
-	src/lexer/lexer.c \
-	src/parser/ast.c \
-	src/parser/parser.c \
-	src/semantic/type.c \
-	src/semantic/symbol.c \
-	src/semantic/semantic.c
-
-SOURCES += $(wildcard src/ir/codegen_llvm.c src/codegen_c.c src/target.c)
-
+# Todos os .c de src/: um modulo novo entra no build sem editar este arquivo.
+SOURCES = $(sort $(wildcard src/*.c src/*/*.c))
 HEADERS = $(wildcard src/*.h src/*/*.h)
 
 DEBUG_TARGET = build/debug/macaronica$(EXEEXT)
 RELEASE_TARGET = build/release/macaronica$(EXEEXT)
 SANITIZE_TARGET = build/sanitize/macaronica$(EXEEXT)
 
-.PHONY: all debug release test test-c test-frontend sanitize clean placa placa-gerar placa-gravar placa-monitor
+.DEFAULT_GOAL := all
 
-all: $(DEBUG_TARGET)
+# Cada parte do PjBL 4 tem seus alvos em mk/<parte>.mk (placa, dsl, bench).
+# Um desses arquivos registra testes com "TESTES_EXTRAS += <alvo>", e o
+# make test os executa depois dos testes do PjBL 1 e do PjBL 3.
+TESTES_EXTRAS =
+-include $(sort $(wildcard mk/*.mk))
+
+.PHONY: all debug release test test-llvm test-frontend test-c sanitize clean
+
+all: $(RELEASE_TARGET)
 
 debug: $(DEBUG_TARGET)
 
 release: $(RELEASE_TARGET)
 
-test: $(DEBUG_TARGET)
+test: test-llvm test-c $(TESTES_EXTRAS)
+
+# PjBL 1 (validos e invalidos) e PjBL 3 (llvm-as, opt -passes=verify, lli, clang).
+test-llvm: $(DEBUG_TARGET)
 	"$(BASH)" tests/run_tests.sh "$(DEBUG_TARGET)" "$(CC)"
-	"$(BASH)" tests/run_c_tests.sh "$(DEBUG_TARGET)" "$(CC)"
 
 test-frontend: $(DEBUG_TARGET)
 	"$(BASH)" tests/run_tests.sh "$(DEBUG_TARGET)" "$(CC)" frontend
+
+# Rota C da placa (--alvo=esp32) executada no PC com o runtime POSIX.
+test-c: $(DEBUG_TARGET)
+	"$(BASH)" tests/run_c_tests.sh "$(DEBUG_TARGET)" "$(CC)"
 
 sanitize: $(SANITIZE_TARGET)
 	"$(BASH)" tests/run_tests.sh "$(SANITIZE_TARGET)" "$(CC)"
@@ -77,38 +95,3 @@ $(SANITIZE_TARGET): $(SOURCES) $(HEADERS)
 
 clean:
 	rm -rf build
-
-# Rota C99 -> ESP-IDF; o firmware sempre usa a saida do compilador Macaronica.
-PROG ?= examples/esp32_blink.mac
-PORT ?= COM4
-IDF_PY ?= idf.py
-
-test-c: $(DEBUG_TARGET)
-	"$(BASH)" tests/run_c_tests.sh "$(DEBUG_TARGET)" "$(CC)"
-
-ifeq ($(EXEEXT),.exe)
-placa:
-	powershell -NoProfile -ExecutionPolicy Bypass -File tools/esp32.ps1 -Action build -Program "$(PROG)" -Port "$(PORT)"
-
-placa-gerar:
-	powershell -NoProfile -ExecutionPolicy Bypass -File tools/esp32.ps1 -Action generate -Program "$(PROG)"
-
-placa-gravar:
-	powershell -NoProfile -ExecutionPolicy Bypass -File tools/esp32.ps1 -Action flash -Program "$(PROG)" -Port "$(PORT)"
-
-placa-monitor:
-	powershell -NoProfile -ExecutionPolicy Bypass -File tools/esp32.ps1 -Action monitor -Port "$(PORT)"
-else
-placa-gerar: $(RELEASE_TARGET)
-	@mkdir -p build/esp32-generated
-	$(RELEASE_TARGET) --alvo=esp32 "$(PROG)" -o build/esp32-generated/prog_gerado.c
-
-placa: placa-gerar
-	$(IDF_PY) -C esp32 -B ../build/esp32 -D SDKCONFIG="$(CURDIR)/build/esp32/sdkconfig" -D IDF_TARGET=esp32 build
-
-placa-gravar: placa
-	$(IDF_PY) -C esp32 -B ../build/esp32 -p "$(PORT)" -b 115200 flash
-
-placa-monitor:
-	$(IDF_PY) -C esp32 -B ../build/esp32 -p "$(PORT)" monitor
-endif

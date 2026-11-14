@@ -69,11 +69,12 @@ make debug
 
 | Linux | Windows | Resultado |
 |---|---|---|
-| `make` | `mingw32-make` | Compila a versão de debug |
+| `make` | `mingw32-make` | Compila a versão de release (padrão), sem os rastros de debug |
 | `make debug` | `mingw32-make debug` | Compila a versão de debug |
 | `make release` | `mingw32-make release` | Compila a versão otimizada, sem os rastros de debug |
-| `make test` | `mingw32-make test` | Compila e executa os testes |
+| `make test` | `mingw32-make test` | Compila e executa todos os testes: PjBL 1, LLVM IR (exige LLVM 18), rota C e os testes de `mk/*.mk` |
 | `make test-frontend` | `mingw32-make test-frontend` | Executa somente a regressão do front-end, sem exigir LLVM |
+| `make test-c` | `mingw32-make test-c` | Executa a rota C da placa (`--alvo=esp32`) no PC, com o runtime POSIX |
 | `make sanitize` | `mingw32-make sanitize` | Executa os testes com AddressSanitizer e UndefinedBehaviorSanitizer, quando disponíveis |
 | `make clean` | `mingw32-make clean` | Remove o diretório `build/` |
 
