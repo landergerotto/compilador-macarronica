@@ -1,7 +1,8 @@
 /.github
 /.codex
 *.md
-!docs/*.md
+# Subpastas de docs/ (defesa/, bench/) tambem entram no repositorio.
+!docs/**/*.md
 /build/
 *.o
 *.obj
