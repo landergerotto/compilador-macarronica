@@ -1,140 +1,282 @@
-# Plano do PjBL 3 e 4 — situação e o que falta
+# Plano do PjBL 3 e 4: frentes, contratos e cronograma
 
-Situação em 14/11/2026. Entrega: link do repositório na tarefa do Canvas até
-**17/11/2026 às 18h** (o Canvas registra 21h UTC); entrega fora do prazo é nula.
-Na mesma noite (Aula 16) há a apresentação, com um programa inédito do professor
-compilado e executado ao vivo no PC e na placa. A **Prova 2** é em 24/11 (Aula 17).
+Situação em 14/11/2026 (sábado, 18h). Entrega: link do repositório na tarefa do
+Canvas até **17/11/2026 às 18h** (o Canvas registra 21h UTC); fora do prazo, a
+entrega é nula. Na mesma noite (Aula 16) há a apresentação: um programa inédito
+do professor é compilado e executado ao vivo **no PC e na placa**, seguido de
+arguição individual sobre qualquer parte (código, IR, pipeline MLIR, runtime da
+placa, resultados). A **Prova 2** é em 24/11.
 
-Branch de trabalho: `backend/luiz/pjbl3-4` (base: `backend/lander/LLVM-IR` +
-`luiz/melhorias`). Fluxo: branch de trabalho → `develop` → `main`.
+Peso na nota: cada RA vale 5 pontos de projeto e 5 de prova, com mínimo 7 por
+RA. O PjBL 3 compõe o RA3 (30% da média) e o PjBL 4 o RA4 (40%). A linguagem é a
+**Macaronica**; o que o enunciado pede só para a Zolang (paridade, `ehprimo`,
+`c ? a ++ b .`) não se aplica.
 
-## Linguagem e peso na nota
+## 1. Organização em frentes
 
-- A linguagem é a **Macaronica**. A especificação (`Zolang_Macaronica.pdf`,
-  Seção 3) destina a Macaronica a Linguagens Formais e Compiladores e a Zolang a
-  Construção de Interpretadores. O enunciado do PjBL 3/4 serve às duas
-  disciplinas; os itens só da Zolang (paridade, `ehprimo`) não se aplicam.
-- Pelo Plano de Ensino, cada RA vale 5 pontos de projeto e 5 de prova, e é
-  preciso tirar 7 em cada RA. O PjBL 3 compõe o RA3 (30% da média) e o PjBL 4,
-  o RA4 (40%). A outra metade de RA3 e RA4 vem da Prova 2.
+```
+develop ──► luiz/placa (integração) ──► develop ──► main      (só no fim, com PR)
+               ▲
+   ┌───────────┼──────────────┬───────────────┬────────────┐
+luiz/linguagem  luiz/placa-esp32  luiz/dsl-mlir  luiz/bench  luiz/qa
+```
 
-## 1. O que já temos
+Regras:
 
-| Área | Estado |
-|---|---|
-| Front-end (PjBL 1/2) | lexer, parser, semântica; 88 testes passando (`make test-frontend`), incluindo os 5 casos do professor em `tests/professor/` |
-| Back-end LLVM IR | todas as construções do escopo mínimo (4.1): locais/parâmetros com `alloca`, globais, aritmética, `icmp`/`fcmp`, `E`/`OU` com curto-circuito, `cond`/`casocontrario`, `repete`/`durante`, funções e recursão, vetores com verificação de limites, registros, textos, E/S via `zl_*` |
-| Regras de IR portável (4.5) | sem triple/datalayout, tipos de largura fixa, sem variádicas, GEP com índices `i32`, `nounwind`, `@zl_principal` |
-| Runtime | `runtime/zl_runtime.h` + `zl_runtime_posix.c`, guardas de execução com códigos 1–7 |
-| Testes de execução | 12 programas em `tests/execucao/` + 7 de erro em `tests/execucao/erros/` |
-| Documentação | `decisoes.md`, `decisoes_backend.md`, `otimizacoes.md` (mem2reg/phi), `guia-defesa-pjbl3.md` |
+1. Ninguém commita na `develop` nem na `main`. O PR `luiz/placa` → `develop` →
+   `main` acontece só no fim, com o OK do Luiz.
+2. Cada frente trabalha na sua branch, saída da `luiz/placa`, e edita **só os
+   arquivos que são dela** (Seção 3). Precisou mudar arquivo de outra frente?
+   Pede à integração, que repassa o pedido ou autoriza um gancho curto.
+3. Só a integração faz merge na `luiz/placa`, na ordem da Seção 5 e depois do
+   portão de testes (Seção 4). Merges pequenos e frequentes: cada entrega
+   pronta vira merge, sem esperar a frente terminar tudo.
+4. Antes de começar uma entrega que depende de outra frente, a frente traz a
+   `luiz/placa` atualizada para a sua branch (`git merge luiz/placa`).
+5. Commits em português, no imperativo, dizendo o porquê, sem linhas de
+   coautoria. Teste antigo não é apagado nem afrouxado para passar.
+6. Cada frente mantém o seu capítulo em `docs/defesa/<frente>.md`: o que fez,
+   por que fez assim, onde está no código e as perguntas prováveis da arguição
+   com resposta. É o material de estudo do Luiz para a defesa.
 
-Feito nesta branch (03/11):
+## 2. Ferramentas fixadas
 
-- `inteira` passou a **64 bits** (`i64`): os casos `nivel3`–`nivel5` do professor
-  guardam CPFs de 11 dígitos e eram rejeitados (E-SEM-037). Semântica, IR,
-  runtime, testes e documentação atualizados (D-021 revisada).
-- **IR legível**, como pede a seção 4.4: `%n.addr`, `%contador.N`, `%fatorial.7`,
-  `@chamadas`, um `; linha N` por linha de origem; globais `internal`.
-- O compilador aceita **`.mcn`** (extensão dos casos do professor) além de `.mac`.
-- `build/` saiu do índice do Git (já estava no `.gitignore`).
-
-## 2. Correção do PjBL 1/2
-
-O enunciado (Seção 1) manda corrigir os erros de front-end apontados na correção
-do PjBL 1/2 antes de gerar código. Situação de cada ponto, conferida em 14/11
-com o build de release:
-
-| Ponto da correção | Situação em 14/11 |
-|---|---|
-| `inteira a, ;`, `inteira a, 5;` e `inteira a, vet{3} c;` derrubam o analisador (ponteiro nulo em `parse_declaration_after_type`) | **ainda trava** (segmentation fault) |
-| 100.000 `+` encadeados estouram a pilha | corrigido (E-SIN-009) |
-| Registro que contém a si mesmo é aceito | corrigido (E-SEM-039) |
-| Não há `make test` nem resultado esperado dos testes | corrigido (`make test`, 88 testes) |
-| Não há entrada e saída | corrigido (intrínsecas da Seção 8.1 da gramática, D-017) |
-| Sem promoção: `flut f receba 2;` e `2.0 ^ 2` são erro | atribuição corrigida; `2.0 ^ 2` e `f + 1` ainda dão E-SEM-017 (item 5 da Seção 3) |
-| Cascatas: `inteira vet{n} v;` gera 5 erros; `b receba 2 2;` e `NAO VER`, 2 cada | ainda ocorrem |
-| `make` gera o build de debug, com linhas `[debug]` no `stderr` | ainda |
-| 13 linhas marcadas `// debug - remover` em `src/` | ainda |
-| Aviso de fluxo Git no README | ainda (seção "Fluxo de trabalho") |
-| Declaração de uso de IA | existe, mas não segue o modelo do Plano de Ensino (6.1) nem cita todas as ferramentas usadas |
-| Blocos não criam escopo (D-014) | ainda; limita o nível Excelente em escopo |
-| `.c` quase sem comentários; busca linear na tabela de símbolos | ainda |
-| Binários versionados em `build/` | corrigido |
-| Fim de linha CRLF em todos os arquivos | ainda; scripts `.sh` com CRLF não rodam no Linux, falta um `.gitattributes` |
-
-## 3. O que falta no PjBL 3
-
-| # | Item | Situação |
+| Para quê | Ferramenta | Versão |
 |---|---|---|
-| 1 | Validar no Linux com **LLVM/MLIR 18**: `llvm-as`, `opt -passes=verify`, `lli` e `clang saida.ll zl_runtime_posix.c` | LLVM/MLIR 18, gcc e make ainda não estão instalados no WSL |
-| 2 | Regerar os exemplos de `otimizacoes.md` (nomes novos e `i64`) | depende do item 1 |
-| 3 | Fixar a versão no README e criar `Dockerfile` (LLVM/MLIR 18) | a fazer |
-| 4 | Casos do professor como testes de **execução** (`.esperado`/`.status`) | hoje só compilam; depende do item 1 |
-| 5 | **Expressões mistas** inteira/flut/duplocarpado (4.2 e 6.1) | hoje só há promoção em atribuição, argumento e retorno. **Recomendado fazer**: o enunciado pede, e a correção do PjBL 1/2 já apontou a tipagem estrita como rígida |
-| 6 | Teste dedicado à diferença entre `/` e `//` (ex.: `7.0 / 2.0` vs `7 // 2`) e conferir se há condicional aninhada | o 01 mostra os dois operadores com operandos diferentes |
+| Compilar o compilador no Windows | TDM-GCC (`gcc`) e `mingw32-make` | gcc 10.3.0, GNU Make 3.82.90 |
+| PjBL 3, Partes B e C, `make test` completo | Ubuntu 26.04 no WSL: `build-essential`, `llvm-18`, `clang-18`, `mlir-18-tools`, `libomp-18-dev`, `python3-matplotlib` (apt) | LLVM/MLIR 18.1.8 |
+| Placa (rota do Luiz) | Arduino IDE / `arduino-cli`, núcleo `esp32:esp32`, placa `esp32:esp32:esp32doit-devkit-v1` | arduino-cli 1.4.1, núcleo 3.3.11 (ESP-IDF 5.5), xtensa-esp-elf-gcc 14.2.0 |
+| Placa (rota do Lander) | ESP-IDF (`esp32/`, `tools/esp32.ps1`) | 5.5.2 |
 
-## 4. O que falta no PjBL 4
+Comandos:
 
-**Parte A — DSL vetorial (20%).** Sintaxe sugerida pelo enunciado:
-`c receba a + b;`, `c receba 3 * a;`, `somavet(a)`, `maxvet(a)`, `prodesc(a, b)`.
-Falta: tokens e produções em `docs/dsl.md`; semântica (tamanhos e tipos
-incompatíveis são erro; promoções do PjBL 3 valem para operações mistas);
-respostas às lacunas 5.5 (vetor de tamanho só conhecido em execução, destino
-igual a um operando, redução de vetor vazio ou unitário); `tests/dsl/` com um
-programa por operação comparado com a versão escalar e 2 inválidos.
+- Windows (Git Bash, com `C:\TDM-GCC-64\bin` no PATH): `mingw32-make`,
+  `mingw32-make test-frontend`, `mingw32-make test-c`.
+- Ubuntu (WSL), na mesma pasta do Windows: `make test`. O Makefile acha o LLVM
+  18 em `/usr/lib/llvm-18/bin`. A partir do Git Bash:
+  `MSYS_NO_PATHCONV=1 wsl --cd "$(pwd -W)" -e make test`.
+- O Makefile principal só tem o núcleo (build e testes do PjBL 1 e 3). Cada
+  parte do PjBL 4 tem os seus alvos em `mk/<parte>.mk` (`mk/placa.mk`,
+  `mk/dsl.mk`, `mk/bench.mk`), e testes novos entram no `make test` com
+  `TESTES_EXTRAS += <alvo>`.
 
-**Parte B — MLIR (25%).** Estratégia recomendada: **híbrida** (o programa segue
-em LLVM IR; só os núcleos vetoriais saem em MLIR com `func`/`arith`/`memref`/
-`affine`, viram LLVM IR com `mlir-translate --mlir-to-llvmir` e são unidos com
-`llvm-link`). Falta: `src/codegen_mlir.c`, `scripts/pipeline.sh` com um
-comentário por passo, e o mesmo núcleo mostrado em 3 níveis do pipeline.
+## 3. Frentes: escopo, arquivos e entregas
 
-**Parte C — estudo de otimização (25%).** Dois núcleos (um elemento a elemento
-e uma redução/produto escalar), vetores de 10⁶ e 10⁷, configurações C0–C3
-(C3 com OpenMP: `convert-scf-to-openmp` + `--canonicalize` no MLIR 18), mediana
-de 5 execuções separando compilação e execução, máquina descrita (i7-7700HQ,
-4 núcleos/8 threads, AVX2), tabela e gráfico gerados por script em
-`scripts/bench/`, `make bench`, e a pergunta obrigatória sobre a redução de
-`flut` sem `-ffast-math`, com evidência (`-Rpass`, IR ou medição). Relatório
-em `docs/relatorio_otimizacao.md`.
+### 3.1 `luiz/linguagem`: PjBL 3 e correção do PjBL 1/2
 
-**Parte D — placa ESP32 clássico, Xtensa (15%).** Rota planejada: o LLVM da
-Espressif compila o mesmo `.ll` para Xtensa e o link usa o núcleo Arduino-ESP32;
-alternativa aceita pelo enunciado: um back-end C. Falta: `zl_runtime_esp32.c`
-(saída pela serial e LED piscando em erro), funções embutidas `pino_modo`,
-`pino_escreve`, `pino_le` e `espera`, `--alvo=esp32` com erro semântico quando
-os locais de uma função excedem a RAM (pilha de 8 KB da tarefa do Arduino),
-`make placa PROG=...`, executáveis em `placa/`, `docs/placa.md` com vídeo de até
-1 minuto, 3 programas iguais aos do PC (laço+vetor, recursão, erro de execução),
-1 com E/S física e 1 rejeitado pela verificação de memória. **Avisar o professor
-da placa escolhida.**
+Rubrica do PjBL 3 inteira (corretude da IR 25%, cobertura 20%, tipos 15%, SSA
+10%, testes 10%, arquitetura 10%, lacunas 10%).
 
-**Infraestrutura (15% do PjBL 4).** `make test` passando a incluir `tests/dsl/`,
-`make bench`, `make placa`, `Dockerfile`, README com versões e uso de IA.
+**Arquivos da frente:** `src/lexer/`, `src/parser/`, `src/semantic/` (menos os
+arquivos `dsl*`), `src/common/`, `src/compiler.*`, `src/main.c`,
+`src/ir/codegen_llvm.*`, `runtime/zl_runtime.h`, `runtime/zl_runtime_posix.c`,
+`tests/` (menos `esp32/`, `placa/`, `dsl/`, `qa/`, `professor/` e
+`run_c_tests.sh`), `examples/` (menos `esp32_*`), `docs/decisoes.md`,
+`docs/decisoes_backend.md`, `docs/otimizacoes.md`, `docs/diagnosticos.md`,
+`docs/gramatica.md`, `docs/guia-defesa-pjbl3.md`.
 
-## 5. Prioridades até 17/11
+Entregas, nesta ordem:
 
-Com três dias, a ordem abaixo segue o peso na nota e as dependências:
+1. `inteira a, ;`, `inteira a, 5;` e `inteira a, vet{3} c;` deixam de travar o
+   analisador (ponteiro nulo em `parse_declaration_after_type`): erro
+   sintático e testes inválidos.
+2. Cascatas: `inteira vet{n} v;`, `b receba 2 2;` e `NAO VER` passam a gerar um
+   erro cada (recuperação com sincronização).
+3. Fim das 13 linhas `// debug - remover`; mensagem de depuração só com opção
+   explícita.
+4. **Depois do merge do `int64_t` da frente da placa:** expressões mistas
+   `inteira`/`flut`/`duplocarpado` (`2.0 ^ 2`, `f + 1`). A semântica anota cada
+   conversão implícita e os dois back-ends só emitem o que foi anotado (LLVM:
+   `sitofp`, `fpext`, `fptrunc`; C: conversão explícita). Pode editar
+   `src/codegen_c.c` só nesse ponto.
+5. `/` e `//` definidos para cada combinação de tipos; `^` e `raiz()` com tipo
+   de retorno definido (intrínsecos `llvm.pow`/`llvm.powi`/`llvm.sqrt` ou libm);
+   um teste dedicado a cada um.
+6. Testes obrigatórios do PjBL 3 (6.1) com `.esperado`: aritmética com
+   precedência e associatividade, condicionais aninhadas, as duas repetições,
+   recursão, vetor, registro, E/S, expressões mistas, `^` e `raiz()`, `/` × `//`.
+7. Todas as lacunas da Seção 4.3 do enunciado respondidas em
+   `docs/decisoes_backend.md`, inclusive `inteira` em i64 (casos do professor
+   com CPF) e `duplocarpado` na placa.
+8. `docs/otimizacoes.md` regenerado com o LLVM 18 (mem2reg e `phi`; para o
+   Excelente, comparação com `-O2`).
 
-1. **14/11:** instalar LLVM/MLIR 18 no WSL; corrigir o crash do parser e os
-   itens simples da Seção 2 (build padrão, `debug - remover`, README,
-   `.gitattributes`); expressões mistas.
-2. **15/11:** validar o PjBL 3 no Linux (`make test`, casos do professor como
-   testes de execução, `Dockerfile`); Parte A (DSL).
-3. **16/11:** Parte B (MLIR e `pipeline.sh`) e Parte C (medições, gráficos e
-   relatório). Parte D em paralelo, com quem estiver com o ESP32.
-4. **17/11:** ensaio da demo, PR para `develop` e depois `main`, link no Canvas
-   antes das 18h, apresentação.
-5. **24/11:** Prova 2.
+### 3.2 `luiz/placa-esp32`: Parte D (15%) e rota C
 
-As partes A–D do PjBL 4 só cabem no prazo se forem divididas entre os quatro
-integrantes.
+**Arquivos da frente:** `src/codegen_c.*`, `src/target.*`,
+`runtime/zl_runtime_esp32.c` (e variantes da placa), `esp32/`, `tools/`,
+`mk/placa.mk`, `tests/esp32/`, `tests/placa/`, `tests/run_c_tests.sh`,
+`placa/`, `docs/placa.md`, `examples/esp32_*`.
 
-## 6. Decisões em aberto
+Entregas, nesta ordem:
 
-1. Expressões mistas: recomendado fazer (Seção 3, item 5).
-2. Estratégia MLIR: híbrida (recomendada) ou programa inteiro em MLIR.
-3. ESP32: LLVM da Espressif (mesmo `.ll`) ou back-end C.
-4. Divisão das partes entre os integrantes.
-5. O `plataformas.zip` das Aulas 14/15 não foi encontrado no Canvas nem no Notion.
+1. **Primeira, até sábado 22h:** `inteira` como `int64_t` no back-end C (hoje
+   falham `12_inteira_64bits` e `erros/02_divisao_overflow` no `test-c`) e fim
+   da falha intermitente "Permission denied" do `test-c` no Windows. Merge
+   imediato: destrava a frente da linguagem.
+2. Runtime ESP32 completo: todas as funções de `zl_runtime.h` (impressão com
+   o mesmo formato do PC, leitura pela serial, potência, raiz, comparação de
+   textos, GPIO, espera); erro de execução com a mesma mensagem do PC e o LED
+   (GPIO2) piscando sem parar.
+3. Rota Arduino, na máquina do Luiz: `make placa PROG=...` gera o C com o
+   compilador, monta o sketch e compila com o `arduino-cli`, deixando o
+   executável em `placa/<programa>/`; `make placa-gravar PORT=COMx` e
+   `make placa-monitor`. A rota ESP-IDF do Lander continua funcionando.
+4. Verificação de memória do `--alvo=esp32` coerente com a pilha da tarefa que
+   executa `zl_principal` (números documentados).
+5. Programas da placa em `tests/placa/`, com `.esperado` idêntico ao do PC:
+   laço com vetor, recursão, erro de execução, E/S física (LED ou botão) e um
+   rejeitado pela verificação de memória.
+6. Script que captura a serial e compara com o `.esperado` (para segunda).
+7. `docs/placa.md` completo: placa, tripla e `-mcpu`, ferramentas e versões,
+   comandos, decisões dependentes do alvo (`duplocarpado`, numeração dos
+   pinos, maior vetor), tamanhos de flash e RAM, vídeo de até 1 minuto
+   (gravado na segunda).
+8. Roteiro da segunda-feira, passo a passo, para o Luiz executar com a placa.
+
+### 3.3 `luiz/dsl-mlir`: Partes A (20%) e B (25%)
+
+**Arquivos da frente:** `docs/dsl.md`, `src/semantic/dsl.*` (novo),
+`src/codegen_mlir.*` (novo), `scripts/pipeline.sh`, `tests/dsl/`,
+`mk/dsl.mk`, seção "Parte B" de `docs/relatorio_otimizacao.md`. Com gancho
+curto (uma chamada para o módulo novo): `src/parser/parser.c`,
+`src/semantic/semantic.c`, `src/ir/codegen_llvm.c`, `src/codegen_c.c` e
+`src/main.c`. O gancho na semântica entra depois das expressões mistas.
+
+Entregas:
+
+1. `docs/dsl.md`: tokens novos e produções (EBNF), regras de tipo (a promoção
+   do PjBL 3 vale elemento a elemento), erros novos com prefixo próprio
+   (`E-DSL-nnn`) e respostas às lacunas da Seção 5.5 do enunciado.
+2. Semântica das operações `c receba a + b;`, `c receba 3 * a;`, `somavet(a)`,
+   `maxvet(a)` e `prodesc(a, b)`: tamanhos ou tipos incompatíveis geram erro.
+   Os testes antigos continuam passando.
+3. MLIR com estratégia **híbrida**: o programa segue em LLVM IR e só os núcleos
+   vetoriais saem em MLIR (`func`, `arith`, `memref`, `affine`, e `vector` via
+   `affine-super-vectorize`), passam por `mlir-opt` e `mlir-translate` e são
+   unidos com `llvm-link`. `scripts/pipeline.sh` com um comentário por passo,
+   validado no MLIR 18.
+4. Back-end C (placa): as mesmas operações como laços em C, já que o alvo não
+   tem SIMD.
+5. `tests/dsl/`: um programa por operação, comparado com a versão escalar
+   escrita à mão na própria linguagem, e 2 inválidos; `make test` os executa.
+6. Relatório, Parte B: o mesmo núcleo em três níveis do pipeline, com o que
+   cada passo preservou e descartou.
+
+### 3.4 `luiz/bench`: Parte C (25%) e reprodutibilidade
+
+**Arquivos da frente:** `scripts/bench/`, `mk/bench.mk`, `Dockerfile`,
+`.dockerignore`, seção "Parte C" de `docs/relatorio_otimizacao.md`.
+
+Entregas:
+
+1. Começa com núcleos MLIR escritos à mão (um elemento a elemento e uma
+   redução ou produto escalar, com inteiro e `flut`), N = 10⁶ e 10⁷, e um
+   driver em C que mede compilação e execução separadamente (mediana de 5).
+   Medições no sistema de arquivos do Linux (cópia em `/tmp`), não em `/mnt/d`.
+2. Configurações C0 a C3: C1 com tripla de alvo e `-Rpass`; C2 com
+   `affine-super-vectorize`; C3 com OpenMP (`convert-scf-to-openmp` e
+   `--canonicalize`) em 1, 2, 4 e 8 threads.
+3. Pergunta obrigatória (redução de `flut` sem `-ffast-math`) respondida com
+   evidência: `-Rpass-missed`, IR com e sem `reassoc`, tempo e diferença
+   numérica.
+4. Tabela e gráficos gerados por script; `make bench` em um comando; máquina
+   descrita (i7-7700HQ, 4 núcleos e 8 threads, AVX2, sem AVX-512).
+5. `Dockerfile` com os mesmos pacotes do WSL, rodando `make test` e
+   `make bench`.
+6. Quando a frente DSL/MLIR entrar, troca os núcleos à mão pelos gerados pelo
+   compilador.
+
+### 3.5 `luiz/qa`: garantia para o programa inédito
+
+**Arquivos da frente:** `tests/qa/` e `scripts/qa/` (novos) e os `.esperado`
+de `tests/professor/`. Não edita `src/` nem `runtime/`: cada bug vai para a
+integração com o menor programa que o reproduz.
+
+Entregas:
+
+1. Casos do professor (`tests/professor/*.mcn`) como testes de execução, com
+   `.esperado` conferido à mão.
+2. Teste diferencial: o mesmo programa por `lli`, por `clang` e pela rota C no
+   PC (e na placa, na segunda) precisa dar a mesma saída.
+3. Mais de 20 programas no estilo dos casos do professor (níveis 3 a 5),
+   cobrindo todas as construções, a DSL e casos de borda (limites de vetor,
+   divisão por zero, overflow de i64, recursão profunda, textos, registros, E/S).
+4. Robustez do front-end com ASan e UBSan no WSL (`make sanitize` e entradas
+   mutadas): nenhum crash e nenhum vazamento.
+
+## 4. Portão para merge na `luiz/placa`
+
+- Windows: `mingw32-make` sem warnings; `test-frontend` e `test-c` sem falhas.
+- Ubuntu: `make test` sem falhas, assim que o LLVM 18 estiver instalado;
+  `make sanitize` limpo quando a mudança mexe no front-end ou no runtime.
+- Nenhum teste antigo removido ou afrouxado sem justificativa no commit.
+- `docs/defesa/<frente>.md` atualizado com a entrega.
+
+## 5. Ordem de integração e contratos
+
+| Quando | Merge | Destrava |
+|---|---|---|
+| sáb 22h | placa: `int64_t` no back-end C, `test-c` estável | linguagem (expressões mistas) |
+| sáb noite | linguagem: crash, cascatas, `debug - remover` | qa (base sem crash) |
+| dom manhã | linguagem: expressões mistas, `/` e `//`, `^` e `raiz()` | dsl-mlir (gancho na semântica) |
+| dom tarde | dsl-mlir: DSL, MLIR, `pipeline.sh`, `tests/dsl` | bench (núcleos do compilador) |
+| dom tarde | placa: runtime completo, rota Arduino, `tests/placa` | dia da placa |
+| dom noite | bench e qa | congelamento às 23h |
+
+Contratos entre frentes:
+
+1. **`inteira` é i64 em tudo:** `i64` na IR, `int64_t` no C e no runtime.
+2. **Conversões implícitas:** a regra é da frente da linguagem; a semântica
+   anota e os back-ends emitem. A DSL usa a mesma função de promoção.
+3. **Runtime:** `runtime/zl_runtime.h` é a única interface. Função nova entra
+   no cabeçalho e no runtime POSIX (linguagem) e no runtime ESP32 (placa) no
+   mesmo ciclo; a integração avisa a outra frente.
+4. **Mesma saída no PC e na placa:** impressão de cada tipo e mensagem de erro
+   de execução idênticas nos dois runtimes. A frente da placa garante isso e
+   pode mover o formato para um arquivo comum aos dois (`runtime/zl_formato.*`).
+5. **Núcleos MLIR:** nome e assinatura publicados em `docs/dsl.md` (atenção à
+   convenção de chamada de `memref` depois do lowering, ou
+   `llvm.emit_c_interface`); a frente de benchmark usa os mesmos.
+6. **Diagnósticos:** códigos novos seguem `docs/diagnosticos.md`; a DSL usa
+   `E-DSL-nnn` e o alvo, `E-TGT-nnn`, para não colidir com `E-SEM`.
+
+Congelamento: domingo às 23h. Depois disso, só correção de bug com teste.
+
+## 6. Cronograma
+
+| Quando | Fase | O que acontece |
+|---|---|---|
+| sáb 14/11, tarde | 0. Fundação | `luiz/placa`, fim de linha LF, Makefile por parte, este plano, LLVM/MLIR 18 no WSL |
+| sáb 14/11 noite → dom 15/11 tarde | 1. Construção | as cinco frentes em paralelo, com merges frequentes |
+| dom 15/11 noite | 2. Integração | últimos merges, `make test` completo no WSL, revisão de código, congelamento |
+| seg 16/11 | 3. Dia da placa | gravar, comparar a serial com o `.esperado`, medir tamanhos, gravar o vídeo, preencher `placa/` |
+| seg 16/11 noite | 4. Ensaio | simulação da defesa com programa inédito e perguntas de arguição |
+| ter 17/11 até 18h | 5. Entrega | PR `luiz/placa` → `develop` → `main` (com OK), link no Canvas (Luiz) |
+
+## 7. Correção do PjBL 1/2: quem resolve
+
+| Ponto da correção | Situação em 14/11 | Frente |
+|---|---|---|
+| `inteira a, ;` e variantes travam o analisador | ainda trava | linguagem (1) |
+| Cascatas de erro | ainda ocorrem | linguagem (2) |
+| `make` gera build de debug com `[debug]` no `stderr` | **corrigido**: `make` agora gera o release | — |
+| 13 linhas `// debug - remover` | ainda | linguagem (3) |
+| Sem promoção: `2.0 ^ 2`, `f + 1` | atribuição já promove; expressão ainda não | linguagem (4) |
+| Fim de linha CRLF | **corrigido**: `.gitattributes` com LF | — |
+| Aviso de fluxo Git no README | ainda | integração (README) |
+| Declaração de uso de IA fora do modelo do Plano de Ensino | ainda | integração (README) |
+| Blocos sem escopo próprio (D-014) | ainda; limita o Excelente | linguagem, se sobrar tempo |
+| Poucos comentários; busca linear na tabela de símbolos | ainda | cada frente comenta o que tocar |
+| 100.000 `+`, registro recursivo, `make test`, E/S, binários em `build/` | corrigidos antes | — |
+
+## 8. Riscos
+
+| Risco | Como está coberto |
+|---|---|
+| Placa só na segunda | rota C testada no PC (`test-c` com GPIO simulado) e sketch compilado pelo `arduino-cli` desde sábado; na segunda falta só gravar e conferir |
+| LLVM/MLIR ausentes no WSL | instalação pelo apt (senha do Luiz); até lá, testes do Windows |
+| Passes do MLIR 18 com nomes diferentes dos do enunciado | dsl-mlir valida o pipeline primeiro, antes da semântica |
+| Conflitos de merge | arquivos com dono, ganchos curtos, `mk/<parte>.mk`, merges pequenos |
+| Programa inédito usa algo não testado | frente qa e simulação da defesa na segunda à noite |
+| Docker não instalado nesta máquina | `Dockerfile` espelha os pacotes do WSL, onde tudo é testado |
