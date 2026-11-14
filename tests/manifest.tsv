@@ -17,3 +17,6 @@ invalidos/semantico_assinatura_incorreta.mac	rejeitado	semantica	quantidade de a
 invalidos/semantico_retorno_incorreto.mac	rejeitado	semantica	retorno bool em funcao inteira
 invalidos/semantico_indice_vetor_invalido.mac	rejeitado	semantica	indice constante fora dos limites
 invalidos/semantico_redefinicao.mac	rejeitado	semantica	valor duplicado no mesmo escopo
+invalidos/sintatico_declaracao_virgula_sem_nome.mac	rejeitado	sintatica	virgula sem nome em declaracao (travava o parser)
+invalidos/sintatico_declaracao_virgula_literal.mac	rejeitado	sintatica	literal no lugar de nome em declaracao (travava o parser)
+invalidos/sintatico_declaracao_vetor_misturado.mac	rejeitado	sintatica	vet depois de virgula em declaracao (travava o parser)

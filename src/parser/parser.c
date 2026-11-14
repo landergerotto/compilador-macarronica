@@ -599,6 +599,9 @@ static AstNode *parse_declaration_after_type(Parser *parser, AstTypeRef *type,
     long long vector_size = 0;
     SourceSpan size_span = type->span;
     const Token *name;
+    /* Ultimo nome aceito. `name` vira NULL quando falta o nome depois de uma
+     * virgula (`inteira a, ;`); o fim do no usa `last_name`, nunca `name`. */
+    const Token *last_name;
     AstNode *node;
 
     if (!field_or_parameter && match(parser, TOKEN_KW_VET)) {
@@ -611,6 +614,7 @@ static AstNode *parse_declaration_after_type(Parser *parser, AstTypeRef *type,
     }
     name = expect(parser, TOKEN_IDENTIFIER, "esperado nome na declaracao");
     if (name == NULL) { ast_type_ref_destroy(type); return NULL; }
+    last_name = name;
     node = new_node(parser, is_vector ? AST_VECTOR_DECL : AST_VAR_DECL,
                     span_from(start, name->span.end));
     if (node == NULL) { ast_type_ref_destroy(type); return NULL; }
@@ -633,6 +637,7 @@ static AstNode *parse_declaration_after_type(Parser *parser, AstTypeRef *type,
         while (match(parser, TOKEN_COMMA)) {
             name = expect(parser, TOKEN_IDENTIFIER, "esperado nome apos ','");
             if (name == NULL) break;
+            last_name = name;
             if (is_vector) {
                 if (!append_declared_token(parser, &node->as.vector_decl.names, name)) { ast_node_destroy(node); return NULL; }
             } else if (!append_declared_token(parser, &node->as.var_decl.names, name)) {
@@ -643,7 +648,7 @@ static AstNode *parse_declaration_after_type(Parser *parser, AstTypeRef *type,
     if (consume_semicolon) {
         (void)expect(parser, TOKEN_SEMICOLON, "esperado ';' apos declaracao");
     }
-    node->span.end = last_end(parser, name->span.end);
+    node->span.end = last_end(parser, last_name->span.end);
     return node;
 }
 
