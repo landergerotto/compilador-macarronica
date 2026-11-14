@@ -58,8 +58,10 @@ static void c_type(CCodegen *gen, size_t id)
         return;
     }
     switch (type->kind) {
-    case TYPE_BOOL:
-    case TYPE_INTEGER: c_write(gen, "int32_t"); break;
+    /* bool cruza a ABI do runtime como int32_t 0/1, igual ao LLVM (i1 -> i32). */
+    case TYPE_BOOL: c_write(gen, "int32_t"); break;
+    /* Contrato do PjBL 3/4: inteira e i64 na IR e int64_t no C e no runtime. */
+    case TYPE_INTEGER: c_write(gen, "int64_t"); break;
     case TYPE_FLOAT: c_write(gen, "float"); break;
     case TYPE_DOUBLE: c_write(gen, "double"); break;
     case TYPE_WORD: c_write(gen, "const char *"); break;
@@ -275,12 +277,14 @@ static void c_literal(CCodegen *gen, const AstNode *node, CValue result)
     c_declare_value(gen, result);
     switch (node->as.literal_expr.literal_kind) {
     case AST_LITERAL_INTEGER:
-        if (node->as.literal_expr.value.integer > INT32_MAX ||
-            node->as.literal_expr.value.integer < INT32_MIN) {
-            c_fail(gen, node, "literal inteira fora de i32");
+        /* O lexer limita a magnitude a INT64_MAX e o sinal vem do menos
+         * unario; um literal negativo aqui seria erro interno. */
+        if (node->as.literal_expr.value.integer < 0) {
+            c_fail(gen, node, "literal inteira negativa na AST");
             return;
         }
-        c_write(gen, " = %lld;\n", node->as.literal_expr.value.integer);
+        /* INT64_C da o tipo de 64 bits mesmo onde long tem 32 (Xtensa). */
+        c_write(gen, " = INT64_C(%lld);\n", node->as.literal_expr.value.integer);
         break;
     case AST_LITERAL_REAL:
         c_write(gen, " = (");
@@ -327,6 +331,13 @@ static int c_builtin_line(BuiltinKind kind)
            kind == BUILTIN_DELAY_MS;
 }
 
+/* Servicos da placa recebem int32_t (zl_runtime.h); a inteira e int64_t. */
+static int c_builtin_board(BuiltinKind kind)
+{
+    return kind == BUILTIN_PIN_MODE || kind == BUILTIN_PIN_WRITE ||
+           kind == BUILTIN_PIN_READ || kind == BUILTIN_DELAY_MS;
+}
+
 static CValue c_call(CCodegen *gen, const AstNode *node)
 {
     const Symbol *function = c_symbol(gen, node->semantic.symbol_id);
@@ -359,7 +370,13 @@ static CValue c_call(CCodegen *gen, const AstNode *node)
     c_write(gen, "(");
     for (i = 0U; i < count; ++i) {
         if (i != 0U) c_write(gen, ", ");
-        c_write(gen, "%s", arguments[i].name);
+        /* Pino, modo e milissegundos: satura em vez de truncar, para que um
+         * valor fora de int32_t chegue ao runtime como invalido, nao como
+         * outro pino valido (2^32 + 2 nao pode virar o GPIO2). */
+        if (c_builtin_board(function->builtin_kind) &&
+            arguments[i].type_id == TYPE_ID_INTEGER)
+            c_write(gen, "mac_arg_i32(%s)", arguments[i].name);
+        else c_write(gen, "%s", arguments[i].name);
     }
     if (c_builtin_line(function->builtin_kind))
         c_write(gen, "%s%zu", count != 0U ? ", " : "", node->span.start.line);
@@ -388,8 +405,10 @@ static CValue c_binary(CCodegen *gen, const AstNode *node)
     if (op == AST_OP_DIVIDE || op == AST_OP_INTEGER_DIVIDE) {
         c_write(gen, "  if (%s == 0) zl_erro_execucao(ZL_ERRO_DIVISAO_ZERO, %zu);\n",
                 right.name, node->span.start.line);
+        /* INT64_MIN // -1 nao cabe em int64_t: em C seria comportamento
+         * indefinido, na IR seria sdiv indefinido. Os dois geram o erro 2. */
         if (integer)
-            c_write(gen, "  if (%s == INT32_MIN && %s == -1) "
+            c_write(gen, "  if (%s == INT64_MIN && %s == -1) "
                     "zl_erro_execucao(ZL_ERRO_DIVISAO_OVERFLOW, %zu);\n",
                     left.name, right.name, node->span.start.line);
     }
@@ -420,8 +439,10 @@ static CValue c_binary(CCodegen *gen, const AstNode *node)
     case AST_OP_LOGICAL_XOR: operation = "!="; break;
     default: c_fail(gen, node, "operador binario C nao suportado"); return result;
     }
+    /* Overflow assinado e indefinido em C: a conta e feita em uint64_t
+     * (modulo 2^64) e volta a int64_t, como add/sub/mul i64 da IR. */
     if (integer && (op == AST_OP_ADD || op == AST_OP_SUBTRACT || op == AST_OP_MULTIPLY))
-        c_write(gen, "mac_i32((uint32_t)%s %s (uint32_t)%s);\n",
+        c_write(gen, "mac_i64((uint64_t)%s %s (uint64_t)%s);\n",
                 left.name, operation, right.name);
     else c_write(gen, "%s %s %s;\n", left.name, operation, right.name);
     return result;
@@ -433,13 +454,6 @@ static CValue c_unary(CCodegen *gen, const AstNode *node)
     const AstNode *operand = node->as.unary_expr.operand;
     CValue result = c_new_value(gen, node->semantic.type_id);
     CValue value;
-    if (op == AST_OP_UNARY_MINUS && operand->kind == AST_LITERAL_EXPR &&
-        operand->as.literal_expr.literal_kind == AST_LITERAL_INTEGER &&
-        operand->as.literal_expr.value.integer == 2147483648LL) {
-        c_declare_value(gen, result);
-        c_write(gen, " = INT32_MIN;\n");
-        return result;
-    }
     value = c_expression(gen, operand);
     if (op == AST_OP_UNARY_PLUS) return value;
     c_declare_value(gen, result);
@@ -447,8 +461,9 @@ static CValue c_unary(CCodegen *gen, const AstNode *node)
     switch (op) {
     case AST_OP_LOGICAL_NOT: c_write(gen, "!%s;\n", value.name); break;
     case AST_OP_UNARY_MINUS:
+        /* -INT64_MIN volta a INT64_MIN, como "sub i64 0, x" na IR. */
         if (value.type_id == TYPE_ID_INTEGER)
-            c_write(gen, "mac_i32(UINT32_C(0) - (uint32_t)%s);\n", value.name);
+            c_write(gen, "mac_i64(UINT64_C(0) - (uint64_t)%s);\n", value.name);
         else c_write(gen, "-%s;\n", value.name);
         break;
     case AST_OP_ROOT:
@@ -562,7 +577,11 @@ static void c_statement(CCodegen *gen, const AstNode *node)
             CValue value = c_expression(gen, node->as.return_stmt.value);
             value = c_convert(gen, value,
                 gen->function->as.function_decl.return_type.resolved_type_id, node);
-            c_write(gen, "  return %s;\n", value.name);
+            /* zl_principal mantem a ABI int32_t com o runtime: o status
+             * recebe os 32 bits baixos da inteira, como o trunc da IR. */
+            if (gen->function->as.function_decl.is_principal)
+                c_write(gen, "  return mac_status(%s);\n", value.name);
+            else c_write(gen, "  return %s;\n", value.name);
         } else c_write(gen, gen->function->as.function_decl.is_principal ?
                        "  return 0;\n" : "  return;\n");
         break;
@@ -578,7 +597,9 @@ static void c_function_signature(CCodegen *gen, const AstNode *node)
         c_fail(gen, node, "funcao C sem simbolo");
         return;
     }
-    c_type(gen, symbol->is_principal ? TYPE_ID_INTEGER : symbol->type_id);
+    /* principal vira int32_t zl_principal(void), a assinatura de zl_runtime.h. */
+    if (symbol->is_principal) c_write(gen, "int32_t");
+    else c_type(gen, symbol->type_id);
     c_write(gen, " ");
     c_function_name(gen, symbol);
     c_write(gen, "(");
@@ -657,10 +678,21 @@ FrontendStatus codegen_c_emit(const SourceFile *source, const AstNode *program,
     gen.status = FRONTEND_STATUS_OK;
     c_write(&gen, "/* Macaronica: C99 gerado automaticamente da AST anotada. */\n"
                   "#include <stdint.h>\n#include <limits.h>\n#include \"zl_runtime.h\"\n\n"
-                  "/* Reconstrucao assinada sem conversao fora da faixa de int32_t. */\n"
-                  "static inline int32_t mac_i32(uint32_t value)\n{\n"
-                  "  return value <= INT32_MAX ? (int32_t)value :\n"
-                  "      -1 - (int32_t)(UINT32_MAX - value);\n}\n\n");
+                  "/* inteira = int64_t. A conta inteira e feita em uint64_t (modulo\n"
+                  " * 2^64) e volta a int64_t sem conversao fora da faixa, que em C\n"
+                  " * dependeria do compilador. */\n"
+                  "static inline int64_t mac_i64(uint64_t value)\n{\n"
+                  "  return value <= (uint64_t)INT64_MAX ? (int64_t)value :\n"
+                  "      -1 - (int64_t)(UINT64_MAX - value);\n}\n\n"
+                  "/* Status de zl_principal: 32 bits baixos, como trunc i64 to i32. */\n"
+                  "static inline int32_t mac_status(int64_t value)\n{\n"
+                  "  uint32_t low = (uint32_t)((uint64_t)value & UINT32_MAX);\n"
+                  "  return low <= (uint32_t)INT32_MAX ? (int32_t)low :\n"
+                  "      -1 - (int32_t)(UINT32_MAX - low);\n}\n\n"
+                  "/* Argumento int32_t dos servicos da placa: satura fora da faixa. */\n"
+                  "static inline int32_t mac_arg_i32(int64_t value)\n{\n"
+                  "  return value > INT32_MAX ? INT32_MAX :\n"
+                  "      value < INT32_MIN ? INT32_MIN : (int32_t)value;\n}\n\n");
     c_records(&gen);
     for (i = 0U; i < semantic->symbols.count; ++i) {
         const Symbol *symbol = &semantic->symbols.items[i];

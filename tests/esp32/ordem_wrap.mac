@@ -1,3 +1,4 @@
+
 inteira estado;
 
 outrafuncao inteira marca(inteira n) @
@@ -25,6 +26,12 @@ inteira principal() @
     imprimeInteira(2147483647 + 1);
     imprimeNl();
     imprimeInteira((-2147483647 - 1) * -1);
+    imprimeNl();
+    imprimeInteira(9223372036854775807 + 1);
+    imprimeNl();
+    imprimeInteira((-9223372036854775807 - 1) * -1);
+    imprimeNl();
+    imprimeInteira(-(-9223372036854775807 - 1));
     imprimeNl();
     respost 0;
 ]
