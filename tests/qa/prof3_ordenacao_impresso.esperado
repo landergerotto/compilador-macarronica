@@ -1,0 +1,15 @@
+ordenados:
+0 Marlin peixe 1 6
+1 Zazu tucano 2 3
+2 Simba leao 190 5
+3 Rajah tigre 210 4
+4 Baloo urso 260 8
+5 Dumbo elefante 540 2
+responsavel: Ana Paula 12345678901 34
+cpfOk: VER
+indiceEncontrado: 3
+somaPesos: 1203
+mediaPesos: 200
+qtdCpfValidos: 3
+qtdAcimaDaMedia: 3
+totalDeIdades: 28

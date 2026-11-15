@@ -1,0 +1,31 @@
+ordenados:
+0 Zazu2 tucano 2 3
+1 Timon15 coruja 2 1
+2 Marlin5 peixe 4 6
+3 Skipper7 pinguim 6 8
+4 Tango12 coala 20 13
+5 Nala14 raposa 22 15
+6 Rex9 macaco 40 10
+7 Alex17 lontra 40 3
+8 Akela8 lobo 60 9
+9 Kiara13 canguru 60 14
+10 Pumba16 jacare 180 2
+11 Simba0 leao 190 1
+12 Rajah3 tigre 210 4
+13 Baloo1 urso 260 2
+14 Stripes10 zebra 320 11
+15 Dumbo4 elefante 540 5
+16 Melman6 girafa 600 7
+17 Bubbles11 hipopotamo 1400 12
+busca binaria: indice 1 inicio 3 fim 2 meio 1 pesoNoMeio 6
+primos: 15 -> 2 3 5 7 11 13 17 19 23 29 31 37 41 43 47
+candidato final: 50
+cpfs validos: 10 ultimo doc 88899900011
+fora da faixa: FAL
+maior distancia: 46 em 0,15
+soma 3956 media 219 duplo 3956 raiz 62.896740774065549
+vizinhos mais pesados: 14
+fib(10) 55 2^8 256
+Rajah3 no indice 12 i 18
+particao: p 17 q 17 k 17 pivo 1400 -> 2 2 4 6 20 22 40 40 60 60 180 190 210 260 320 540 600 1400
+maior peso: 1400
