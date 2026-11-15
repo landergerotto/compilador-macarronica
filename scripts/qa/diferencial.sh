@@ -19,6 +19,9 @@
 #   P.in        stdin (opcional; sem ele, /dev/null)
 #   P.status    codigo de saida esperado (padrao 0). O shell so ve os 8 bits
 #               baixos: respost 302 na principal aparece como 46.
+#   P.status-windows  status visto pelo Git Bash, quando difere: o MSYS mostra
+#               127 para codigo de saida negativo (um "return -1" em C puro
+#               tambem sai 127 la), onde o POSIX mostra 255.
 #   P.erro      prefixo esperado do erro de execucao no stderr, por exemplo
 #               "linha 7: erro de execucao 1:" (sem ele, o stderr tem de ser vazio)
 #   P.rotas     rotas em que o programa vale (padrao: todas), ex.: "c-esp32 c-host"
@@ -258,6 +261,9 @@ for fonte in "${programas[@]}"; do
     entrada="$base.in"; [ -f "$entrada" ] || entrada=/dev/null
     status_esperado=0
     [ ! -f "$base.status" ] || status_esperado=$(tr -d ' \r\n' <"$base.status")
+    if [ "$windows" -eq 1 ] && [ -f "$base.status-windows" ]; then
+        status_esperado=$(tr -d ' \r\n' <"$base.status-windows")
+    fi
     erro_esperado=
     [ ! -f "$base.erro" ] || erro_esperado=$(head -n 1 "$base.erro" | tr -d '\r')
     # Sem nenhum arquivo de expectativa: diferencial puro (so rotas entre si).
