@@ -1,0 +1,21 @@
+aspas: "oi"
+barra: \ fim
+tab:	|
+acentos: ação, pão, coração, ñ, €
+duas
+linhas
+[]
+vazia igual a aspas: VER
+vazia diferente: FAL
+abc: VER
+abc contra abd: VER
+abc contra abc com espaco: FAL
+prefixo: FAL
+acento: VER
+sem acento: FAL
+escapes: VER
+vetor zerado: VER
+copia por valor: VER
+registro: VER
+Ana;Caio;Ana;
+Mingau faz miau

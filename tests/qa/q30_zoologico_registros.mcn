@@ -1,0 +1,108 @@
+registro Animal @ [ palavra nome; palavra especie; inteira peso; inteira idade; bool vacinado; ]
+
+Animal vet{6} zoo;
+inteira quantidade;
+
+outrafuncao vazio cadastra(palavra nome, palavra especie, inteira peso, inteira idade, bool vacinado) @
+[
+    zoo{quantidade}.nome receba nome;
+    zoo{quantidade}.especie receba especie;
+    zoo{quantidade}.peso receba peso;
+    zoo{quantidade}.idade receba idade;
+    zoo{quantidade}.vacinado receba vacinado;
+    quantidade receba quantidade + 1;
+]
+
+outrafuncao vazio ordenaPorPeso() @
+[
+    inteira i, j;
+    Animal temp;
+    repete (i receba 0, i < quantidade - 1, i receba i + 1) edai
+    [
+        repete (j receba 0, j < quantidade - 1 - i, j receba j + 1) edai
+        [
+            cond (zoo{j}.peso > zoo{j + 1}.peso) edai
+            [
+                temp receba zoo{j};
+                zoo{j} receba zoo{j + 1};
+                zoo{j + 1} receba temp;
+            ]
+        ]
+    ]
+]
+
+outrafuncao inteira procura(palavra nome) @
+[
+    inteira i;
+    repete (i receba 0, i < quantidade, i receba i + 1) edai
+    [
+        cond (zoo{i}.nome == nome) edai [ respost i; ]
+    ]
+    respost -1;
+]
+
+outrafuncao Animal maisVelho() @
+[
+    inteira i;
+    Animal melhor;
+    melhor receba zoo{0};
+    repete (i receba 1, i < quantidade, i receba i + 1) edai
+    [
+        cond (zoo{i}.idade > melhor.idade) edai [ melhor receba zoo{i}; ]
+    ]
+    respost melhor;
+]
+
+outrafuncao duplocarpado mediaPeso() @
+[
+    inteira i, soma;
+    duplocarpado total, n;
+    repete (i receba 0, i < quantidade, i receba i + 1) edai [ soma receba soma + zoo{i}.peso; ]
+    total receba soma;
+    n receba quantidade;
+    respost total / n;
+]
+
+inteira principal() @
+[
+    inteira i, vacinados;
+    Animal velho;
+    cadastra("Simba", "leao", 190, 5, VER);
+    cadastra("Dumbo", "elefante", 540, 2, FAL);
+    cadastra("Zazu", "tucano", 2, 3, VER);
+    cadastra("Baloo", "urso", 260, 8, VER);
+    cadastra("Marlin", "peixe", 1, 6, FAL);
+    cadastra("Rajah", "tigre", 210, 4, VER);
+    ordenaPorPeso();
+    repete (i receba 0, i < quantidade, i receba i + 1) edai
+    [
+        imprimeInteira(i);
+        imprimePalavra(" ");
+        imprimePalavra(zoo{i}.nome);
+        imprimePalavra(" ");
+        imprimeInteira(zoo{i}.peso);
+        imprimePalavra(" ");
+        imprimeBool(zoo{i}.vacinado);
+        imprimeNl();
+        cond (zoo{i}.vacinado) edai [ vacinados receba vacinados + 1; ]
+    ]
+    imprimePalavra("Baloo em ");
+    imprimeInteira(procura("Baloo"));
+    imprimeNl();
+    imprimePalavra("Nemo em ");
+    imprimeInteira(procura("Nemo"));
+    imprimeNl();
+    velho receba maisVelho();
+    imprimePalavra("mais velho ");
+    imprimePalavra(velho.nome);
+    imprimePalavra(" ");
+    imprimeInteira(velho.idade);
+    imprimeNl();
+    imprimePalavra("media ");
+    imprimeDuplocarpado(mediaPeso());
+    imprimeNl();
+    imprimePalavra("vacinados ");
+    imprimeInteira(vacinados);
+    imprimeNl();
+    respost vacinados * 10 + procura("Rajah");
+]

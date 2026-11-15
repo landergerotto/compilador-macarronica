@@ -1,0 +1,10 @@
+inteira principal() @
+[
+    inteira a;
+    imprimePalavra("lendo");
+    imprimeNl();
+    a receba leInteira();
+    imprimeInteira(a);
+    imprimeNl();
+    respost 0;
+]

@@ -1,0 +1,72 @@
+inteira valor;
+inteira total;
+
+outrafuncao inteira usaGlobal() @
+[
+    valor receba valor + 1;
+    respost valor;
+]
+
+outrafuncao inteira sombra(inteira valor) @
+[
+    valor receba valor * 2;
+    respost valor;
+]
+
+outrafuncao inteira localSombra() @
+[
+    inteira total;
+    total receba 99;
+    respost total;
+]
+
+outrafuncao inteira contaChamada() @
+[
+    inteira local;
+    local receba local + 1;
+    respost local;
+]
+
+outrafuncao inteira blocoSemEscopo(bool entra) @
+[
+    cond (entra) edai
+    [
+        inteira dentro;
+        dentro receba 5;
+    ]
+    respost dentro;
+]
+
+inteira principal() @
+[
+    inteira i;
+    imprimeInteira(usaGlobal());
+    imprimeInteira(usaGlobal());
+    imprimeInteira(valor);
+    imprimeNl();
+    imprimeInteira(sombra(21));
+    imprimePalavra(" ");
+    imprimeInteira(valor);
+    imprimeNl();
+    total receba 7;
+    imprimeInteira(localSombra());
+    imprimePalavra(" ");
+    imprimeInteira(total);
+    imprimeNl();
+    imprimeInteira(contaChamada());
+    imprimeInteira(contaChamada());
+    imprimeInteira(contaChamada());
+    imprimeNl();
+    imprimeInteira(blocoSemEscopo(VER));
+    imprimePalavra(" ");
+    imprimeInteira(blocoSemEscopo(FAL));
+    imprimeNl();
+    repete (i receba 0, i < 3, i receba i + 1) edai
+    [
+        inteira acumula;
+        acumula receba acumula + 10;
+    ]
+    imprimeInteira(acumula);
+    imprimeNl();
+    respost valor + total;
+]

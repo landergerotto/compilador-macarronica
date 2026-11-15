@@ -1,0 +1,12 @@
+inteira principal() @
+[
+    inteira vet{4} v;
+    inteira i;
+    i receba leInteira();
+    v{0} receba 10;
+    imprimeInteira(v{0});
+    imprimeNl();
+    imprimeInteira(v{i});
+    imprimeNl();
+    respost 0;
+]

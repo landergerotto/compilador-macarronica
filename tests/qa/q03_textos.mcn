@@ -1,0 +1,72 @@
+registro Animal @ [ palavra nome; palavra som; ]
+
+outrafuncao palavra escolhe(bool primeiro, palavra a, palavra b) @
+[
+    cond (primeiro) edai [ respost a; ]
+    casocontrario edai [ respost b; ]
+]
+
+outrafuncao vazio linha(palavra rotulo, bool valor) @
+[
+    imprimePalavra(rotulo);
+    imprimePalavra(": ");
+    imprimeBool(valor);
+    imprimeNl();
+]
+
+inteira principal() @
+[
+    palavra vazia, texto;
+    palavra vet{3} nomes;
+    Animal gato, copia;
+    inteira i, contagem;
+    imprimePalavra("aspas: \"oi\"");
+    imprimeNl();
+    imprimePalavra("barra: \\ fim");
+    imprimeNl();
+    imprimePalavra("tab:\t|");
+    imprimeNl();
+    imprimePalavra("acentos: ação, pão, coração, ñ, €");
+    imprimeNl();
+    imprimePalavra("duas\nlinhas");
+    imprimeNl();
+    imprimePalavra("[");
+    imprimePalavra(vazia);
+    imprimePalavra(nomes{2});
+    imprimePalavra("");
+    imprimePalavra("]");
+    imprimeNl();
+    texto receba "abc";
+    linha("vazia igual a aspas", vazia == "");
+    linha("vazia diferente", vazia ! "");
+    linha("abc", texto == "abc");
+    linha("abc contra abd", texto ! "abd");
+    linha("abc contra abc com espaco", texto == "abc ");
+    linha("prefixo", "ab" == texto);
+    linha("acento", "ação" == "ação");
+    linha("sem acento", "ação" == "acao");
+    linha("escapes", "\\\"" == "\\\"");
+    linha("vetor zerado", nomes{1} == vazia);
+    gato.nome receba "Mingau";
+    gato.som receba "miau";
+    copia receba gato;
+    gato.som receba "ronrom";
+    linha("copia por valor", copia.som == "miau");
+    linha("registro", gato.som == "ronrom");
+    nomes{0} receba "Ana";
+    nomes{1} receba escolhe(FAL, "Bia", "Caio");
+    nomes{2} receba escolhe(VER, nomes{0}, nomes{1});
+    contagem receba 0;
+    repete (i receba 0, i < 3, i receba i + 1) edai
+    [
+        imprimePalavra(nomes{i});
+        imprimePalavra(";");
+        cond (nomes{i} == "Ana") edai [ contagem receba contagem + 1; ]
+    ]
+    imprimeNl();
+    imprimePalavra(copia.nome);
+    imprimePalavra(" faz ");
+    imprimePalavra(copia.som);
+    imprimeNl();
+    respost contagem;
+]

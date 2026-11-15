@@ -1,0 +1,20 @@
+outrafuncao inteira somaAte(inteira n) @
+[
+    cond (n == 0) edai [ respost 0; ]
+    casocontrario edai [ respost n + somaAte(n - 1); ]
+]
+
+outrafuncao inteira profundidade(inteira n, inteira limite) @
+[
+    cond (n == limite) edai [ respost n; ]
+    casocontrario edai [ respost profundidade(n + 1, limite); ]
+]
+
+inteira principal() @
+[
+    imprimeInteira(somaAte(5000));
+    imprimeNl();
+    imprimeInteira(profundidade(0, 10000));
+    imprimeNl();
+    respost somaAte(100) // 50;
+]

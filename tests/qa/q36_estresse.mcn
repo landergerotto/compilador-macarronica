@@ -1,0 +1,32 @@
+bool vet{1000} composto;
+
+inteira principal() @
+[
+    inteira i, j, primos, ultimo, soma;
+    repete (i receba 2, i < 1000, i receba i + 1) edai
+    [
+        cond (NÃO composto{i}) edai
+        [
+            primos receba primos + 1;
+            ultimo receba i;
+            j receba i * i;
+            durante (j < 1000) edai
+            [
+                composto{j} receba VER;
+                j receba j + i;
+            ]
+        ]
+    ]
+    imprimeInteira(primos);
+    imprimePalavra(" ");
+    imprimeInteira(ultimo);
+    imprimeNl();
+    soma receba 0;
+    repete (i receba 0, i < 1000000, i receba i + 1) edai
+    [
+        soma receba soma + i - i // 2 * 2;
+    ]
+    imprimeInteira(soma);
+    imprimeNl();
+    respost primos // 10;
+]

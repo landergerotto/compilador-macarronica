@@ -1,0 +1,8 @@
+inteira principal() @
+[
+    inteira x;
+    x receba 4294967296;
+    imprimeInteira(x + 258);
+    imprimeNl();
+    respost x + 258;
+]

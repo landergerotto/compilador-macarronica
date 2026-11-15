@@ -1,0 +1,62 @@
+registro Medida @ [ flut f; duplocarpado d; ]
+
+outrafuncao duplocarpado comoDuplo(duplocarpado x) @
+[
+    respost x;
+]
+
+outrafuncao flut metade(flut x) @
+[
+    respost x / 2.0;
+]
+
+outrafuncao duplocarpado deInteira(inteira n) @
+[
+    respost n;
+]
+
+inteira principal() @
+[
+    flut f;
+    duplocarpado d, tres;
+    Medida m;
+    duplocarpado vet{2} ds;
+    inteira grande;
+    f receba 16777217;
+    imprimeFlut(f);
+    imprimeNl();
+    grande receba 9007199254740993;
+    d receba grande;
+    imprimeDuplocarpado(d);
+    imprimeNl();
+    d receba 0.1;
+    imprimeDuplocarpado(d);
+    imprimeNl();
+    imprimeDuplocarpado(comoDuplo(0.1));
+    imprimeNl();
+    imprimeDuplocarpado(comoDuplo(3));
+    imprimeNl();
+    imprimeFlut(metade(7));
+    imprimeNl();
+    imprimeDuplocarpado(deInteira(-5));
+    imprimeNl();
+    m.f receba 12345678901;
+    m.d receba m.f;
+    imprimeFlut(m.f);
+    imprimePalavra(" ");
+    imprimeDuplocarpado(m.d);
+    imprimeNl();
+    ds{0} receba 1;
+    tres receba 3;
+    ds{1} receba ds{0} / tres;
+    imprimeDuplocarpado(ds{1});
+    imprimeNl();
+    f receba 1;
+    f receba f / 3.0;
+    d receba f;
+    imprimeFlut(f);
+    imprimePalavra(" ");
+    imprimeDuplocarpado(d);
+    imprimeNl();
+    respost 0;
+]
