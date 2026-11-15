@@ -1,0 +1,16 @@
+// Núcleo elemento a elemento em flut (f32): c[i] = a[i] + b[i].
+// Na DSL: "c receba a + b;" com vetores flut de N elementos.
+//
+// Cada c[i] depende só de a[i] e b[i]: não há ordem de soma a preservar, então
+// vetorizar não muda nenhum bit do resultado (ao contrário das reduções).
+// scripts/bench/medir.py troca @N@ pelo número de elementos.
+func.func @soma_f32(%a: memref<@N@xf32>, %b: memref<@N@xf32>,
+                    %c: memref<@N@xf32>) {
+  affine.for %i = 0 to @N@ {
+    %x = affine.load %a[%i] : memref<@N@xf32>
+    %y = affine.load %b[%i] : memref<@N@xf32>
+    %s = arith.addf %x, %y : f32
+    affine.store %s, %c[%i] : memref<@N@xf32>
+  }
+  return
+}
