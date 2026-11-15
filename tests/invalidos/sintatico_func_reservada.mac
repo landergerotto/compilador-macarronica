@@ -1,0 +1,9 @@
+func inteira soma(inteira a, inteira b) @
+[
+    respost a + b;
+]
+
+vazio principal() @
+[
+    respost;
+]

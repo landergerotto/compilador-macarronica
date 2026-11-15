@@ -295,10 +295,12 @@ static int collect_function_signatures(SemanticAnalyzer *analyzer, AstNode *root
         }
         free(parameter_types);
     }
-    if (principal_count != 1U) {
+    /* So a falta de principal e relatada aqui. Uma segunda principal ja gera
+     * E-SEM-003 (redefinicao) no ponto exato; relatar E-SEM-004 tambem seria
+     * cascata: dois diagnosticos para o mesmo erro. */
+    if (principal_count == 0U) {
         semantic_error(analyzer, program_span, "E-SEM-004",
-                       "programa deve declarar exatamente uma principal; encontrou %zu",
-                       principal_count);
+                       "programa deve declarar exatamente uma principal; nenhuma encontrada");
     }
     return !analyzer->allocation_failed;
 }
@@ -863,10 +865,51 @@ static size_t analyze_expression(SemanticAnalyzer *analyzer, AstNode *node,
     }
 }
 
+/* Simbolo do vetor nomeado por um identificador simples (sem indice), ou
+ * SYMBOL_ID_NONE se o no nao for isso. */
+static size_t whole_vector_symbol(SemanticAnalyzer *analyzer, const AstNode *node)
+{
+    size_t symbol_id;
+    const Symbol *symbol;
+    const Type *type;
+    if (node == NULL || node->kind != AST_IDENTIFIER_EXPR) return SYMBOL_ID_NONE;
+    symbol_id = symbol_table_lookup(&analyzer->result->symbols, analyzer->current_scope_id,
+                                    SYMBOL_NAMESPACE_VALUE, node->as.identifier_expr.name);
+    if (symbol_id == SYMBOL_ID_NONE) return SYMBOL_ID_NONE;
+    symbol = symbol_table_get(&analyzer->result->symbols, symbol_id);
+    if (symbol == NULL) return SYMBOL_ID_NONE;
+    type = type_table_get(&analyzer->result->types, symbol->type_id);
+    return type != NULL && type->kind == TYPE_ARRAY ? symbol_id : SYMBOL_ID_NONE;
+}
+
 static void analyze_assignment(SemanticAnalyzer *analyzer, AstNode *node)
 {
-    size_t target = analyze_expression(analyzer, node->as.assignment.target, 0);
-    size_t value = analyze_expression(analyzer, node->as.assignment.value, 0);
+    AstNode *target_node = node->as.assignment.target;
+    AstNode *value_node = node->as.assignment.value;
+    size_t target_vector = whole_vector_symbol(analyzer, target_node);
+    size_t target;
+    size_t value;
+    if (target_vector != SYMBOL_ID_NONE) {
+        /* Vetor inteiro como alvo (`destino receba origem`): a linguagem nao
+         * copia vetores (D-006), entao ha um erro so, no alvo. Se o valor
+         * tambem e um vetor inteiro, e o mesmo erro e nao e relatado de novo;
+         * qualquer outro valor e analisado normalmente. */
+        semantic_error(analyzer, target_node->span, "E-SEM-026",
+                       "vetor '%s' nao pode ser atribuido de uma vez; atribua elemento por elemento",
+                       target_node->as.identifier_expr.name);
+        annotate(target_node, TYPE_ID_ERROR, target_vector,
+                 AST_SEMANTIC_ARRAY | AST_SEMANTIC_ERROR);
+        value = whole_vector_symbol(analyzer, value_node);
+        if (value != SYMBOL_ID_NONE) {
+            annotate(value_node, TYPE_ID_ERROR, value, AST_SEMANTIC_ARRAY | AST_SEMANTIC_ERROR);
+        } else {
+            (void)analyze_expression(analyzer, value_node, 0);
+        }
+        annotate(node, TYPE_ID_ERROR, SYMBOL_ID_NONE, AST_SEMANTIC_ERROR);
+        return;
+    }
+    target = analyze_expression(analyzer, target_node, 0);
+    value = analyze_expression(analyzer, value_node, 0);
     if ((node->as.assignment.target->semantic.flags & AST_SEMANTIC_LVALUE) == 0U &&
         target != TYPE_ID_ERROR) {
         semantic_error(analyzer, node->as.assignment.target->span, "E-SEM-019",

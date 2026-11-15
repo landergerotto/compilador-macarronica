@@ -1,0 +1,8 @@
+vazio principal() @
+[
+    inteira a;
+    a receba 2 2;
+    a receba 1;
+    a receba ;
+    respost;
+]

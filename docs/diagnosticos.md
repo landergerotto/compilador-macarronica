@@ -33,6 +33,7 @@ regra. A linha e a coluna são informadas separadamente no diagnóstico.
 | `E-LEX-004` | Literal real incompleto | Há um ponto depois dos dígitos, mas nenhum dígito depois do ponto. | `12.` |
 | `E-LEX-005` | UTF-8 inválido | A entrada contém uma sequência de bytes UTF-8 inválida, dentro ou fora de um literal de `palavra`. | Entrada com bytes inválidos |
 | `E-LEX-006` | Literal numérico fora do intervalo | Um literal inteiro ultrapassa `long long` ou a parte inteira de um literal real ultrapassa o intervalo representável por `double`. | Número excessivamente grande |
+| `E-LEX-007` | Negação lógica mal grafada | Aparece `NAO` (sem til) ou `não`, `Não`, `NãO` etc. como palavra inteira. A negação é somente `NÃO` (D-001). O lexer relata o erro e segue como se fosse `NÃO`, para não gerar erros sintáticos em cascata. `nao` e `Nao` continuam nomes válidos. | `b receba NAO VER;` |
 
 `E-LEX-002`, `E-LEX-005` e `E-LEX-006` possuem mais de uma mensagem concreta,
 mas cada grupo representa uma única categoria de erro.
@@ -41,8 +42,8 @@ mas cada grupo representa uma única categoria de erro.
 
 | Código | Significado | Quando ocorre | Exemplo curto |
 |---|---|---|---|
-| `E-SIN-001` | Construção sintática esperada | Falta uma expressão, um tipo, um comando, uma declaração de campo ou uma declaração global válida. A mensagem especifica o que era esperado. | `x receba ;` |
-| `E-SIN-002` | Token obrigatório ausente | `expect` não encontra o delimitador ou palavra exigida pela produção; também cobre `]` ausente ao fim de bloco ou registro. | `respost 1` sem `;` |
+| `E-SIN-001` | Construção sintática esperada | Falta uma expressão, um tipo, um comando, uma declaração de campo ou uma declaração global válida. A mensagem especifica o que era esperado. Uma variante aponta comando fora de função logo depois de um `]` a mais. | `x receba ;` |
+| `E-SIN-002` | Token obrigatório ausente | `expect` não encontra o delimitador ou palavra exigida pela produção; também cobre `[` ou `]` ausente em bloco ou registro, tamanho de vetor que não é um único literal inteiro (`vet{n}`, `vet{2 + 1}`), `vet` depois de `,` e função declarada sem `outrafuncao`. | `respost 1` sem `;` |
 | `E-SIN-003` | Falta de memória durante o parsing | O parser não consegue alocar um nó, texto ou item de lista. É um diagnóstico interno, não um erro de escrita do programa. | — |
 | `E-SIN-004` | Palavra `func` sem produção | `func` aparece, embora a gramática aceite `outrafuncao` ou `principal`. | `func inteira soma()` |
 | `E-SIN-005` | Comparadores encadeados | Mais de um comparador aparece na mesma comparação sem composição explícita. | `a < b < c` |
@@ -62,7 +63,7 @@ significado deve ser atribuído a ele até que uma decisão do projeto o defina.
 | `E-SEM-001` | Tipo não declarado | Uma referência de tipo não corresponde a um tipo nativo nem a um `registro` declarado. | `Pessoa p;` sem `registro Pessoa` |
 | `E-SEM-002` | `vazio` em contexto de valor | O tipo `vazio` aparece em variável, vetor, parâmetro, campo ou outro contexto que exige valor. | `vazio x;` se esse nó chegar à semântica |
 | `E-SEM-003` | Redefinição no mesmo escopo | Um nome de valor, função, campo ou tipo é declarado novamente no mesmo espaço de nomes e escopo. Possui variantes de mensagem para valores e tipos. | `inteira x, x;` |
-| `E-SEM-004` | Quantidade inválida de `principal` | O programa não declara exatamente uma função `principal`. | Programa sem `principal` |
+| `E-SEM-004` | Falta `principal` | O programa não declara a função `principal`. Uma segunda `principal` não gera este código: ela já é relatada como `E-SEM-003` (redefinição), no ponto exato. | Programa sem `principal` |
 | `E-SEM-005` | Tamanho inválido de vetor | O tamanho declarado é menor ou igual a zero. | `inteira vet{0} itens;` |
 | `E-SEM-006` | Função usada sem chamada | O nome de uma função é usado como se fosse um valor. | `x receba soma;` |
 | `E-SEM-007` | Identificador de valor não declarado | Uma variável ou outro valor é usado antes da declaração ou nunca foi declarado. Também se aplica à base não declarada de um acesso de vetor. | `x receba y;` sem declarar `y` |
@@ -84,7 +85,7 @@ significado deve ser atribuído a ele até que uma decisão do projeto o defina.
 | `E-SEM-023` | Função `vazio` retorna valor | `respost` contém expressão dentro de função com retorno `vazio`. | `respost 1;` em função `vazio` |
 | `E-SEM-024` | Função não vazia retorna sem valor | `respost;` aparece em função cujo retorno não é `vazio`. | `respost;` em função `inteira` |
 | `E-SEM-025` | Tipo de retorno incompatível | O valor de `respost` não é atribuível ao retorno declarado. | `respost VER;` em função `inteira` |
-| `E-SEM-026` | Vetor completo usado como valor | O nome de um vetor é usado sem indexação. Somente um elemento pode ser lido como valor. | `x receba itens;` |
+| `E-SEM-026` | Vetor completo usado como valor | O nome de um vetor é usado sem indexação. Somente um elemento pode ser lido como valor. Uma variante cobre o vetor completo como alvo de atribuição: `destino receba origem` gera um erro só, no alvo, mesmo que `origem` também seja vetor. | `x receba itens;` |
 | `E-SEM-027` | Chamada não vazia usada como comando | Uma chamada isolada em um comando retorna valor, quando somente chamada `vazio` pode ficar isolada. | `soma();` se `soma` retorna `inteira` |
 | `E-SEM-028` | Comando de expressão inválido | Um nó de comando de expressão não contém uma chamada de função. É uma defesa interna da AST. | — |
 | `E-SEM-029` | Nó inválido como comando | A AST contém em um bloco um tipo de nó que não representa comando. É uma defesa interna da AST. | — |
@@ -102,6 +103,21 @@ começar. `E-SEM-000` sinaliza falha de alocação.
 Os códigos `E-SEM-003`, `E-SEM-007` e `E-SEM-017` têm variantes de mensagem
 para contextos relacionados. Isso não cria novos códigos: a categoria continua
 sendo identificada pelo mesmo número.
+
+## Um diagnóstico por erro
+
+Cada erro real gera um diagnóstico, sem cascata (D-018):
+
+- o lexer relata todos os erros léxicos; havendo algum, o parser não roda;
+- o parser usa modo pânico com sincronização. O primeiro erro de um comando é
+  relatado, os seguintes do mesmo comando são consequência dele e ficam em
+  silêncio, e o parser retoma no próximo ponto seguro;
+- a semântica só roda sobre uma AST sem erros sintáticos, e um erro de
+  subexpressão vira o tipo `erro`, que não gera novos diagnósticos acima dele.
+
+Dois erros reais em comandos distintos geram dois diagnósticos. O
+`tests/manifest.tsv` registra, na coluna `erros`, quantos diagnósticos cada
+caso deve produzir, e `tests/run_tests.sh` confere esse número exato.
 
 ## Manutenção do catálogo
 

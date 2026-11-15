@@ -1,0 +1,10 @@
+vazio principal() @
+[
+    inteira a;
+    a receba 1;
+    respost;
+
+outrafuncao inteira dobro(inteira x) @
+[
+    respost x * 2;
+]

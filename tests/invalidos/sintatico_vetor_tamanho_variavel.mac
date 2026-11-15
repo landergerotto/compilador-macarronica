@@ -1,0 +1,7 @@
+vazio principal() @
+[
+    inteira n;
+    inteira vet{n} valores;
+    n receba 3;
+    respost;
+]
