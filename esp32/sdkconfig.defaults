@@ -1,2 +1,8 @@
 # Flash detectada na DevKit V1 desta sessao: 4 MB.
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+# Mesmo comportamento da rota Arduino (arduino-esp32 3.3.x): tick de 1 ms, para
+# espera() ter a mesma resolucao, e o watchdog de tarefas vigiando so o ocioso
+# do nucleo 0; o programa roda no nucleo 1 e um calculo longo sem espera nao
+# reinicia a placa.
+CONFIG_FREERTOS_HZ=1000
+CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1=n

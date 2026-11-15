@@ -64,6 +64,59 @@ fim da ligação; se outro processo o segura nesse instante, a reabertura falha.
 
 Verificação: `test-frontend` com 88 de 88 e três `test-c` seguidos com 22 de 22.
 
+## 3. Runtime da placa completo (entrega 2)
+
+O runtime da placa implementa toda a interface `runtime/zl_runtime.h`. Ele é
+escrito à mão, mas é só a plataforma: o programa vem inteiro do compilador.
+
+| Arquivo | Papel |
+|---|---|
+| `runtime/zl_formato.h` | Texto de cada valor, linha de erro e validação da entrada, **o mesmo código no PC e na placa** |
+| `runtime/zl_placa.h` | Regras dos pinos da DOIT DevKit V1 (quais existem, quais são só entrada) e da espera |
+| `runtime/zl_runtime_esp32.c` | Runtime da placa: impressão e leitura pela serial, potência, raiz, textos, GPIO, espera, erro com LED |
+| `runtime/zl_esp32.h` | As 4 funções de serial que cada rota fornece e `zl_esp32_inicia` |
+| `runtime/zl_plataforma_arduino.cpp` | Rota Arduino: ponte C++ → C para a `Serial` |
+| `runtime/zl_plataforma_idf.c` | Rota ESP-IDF: driver de UART0 e `app_main` |
+| `runtime/zl_placa_pc.c` | Os mesmos pinos simulados no PC, com as mesmas regras (para o `test-c`) |
+
+Decisões:
+
+- **Mesma saída por construção.** O formato saiu do runtime POSIX para
+  `zl_formato.h`, um cabeçalho com implementação: cada runtime o inclui com
+  `ZL_FORMATO_IMPLEMENTACAO` em um único arquivo. Assim nenhuma linha de
+  ligação existente mudou (testes, bench, qa continuam ligando só
+  `zl_runtime_posix.c`). No runtime POSIX mudou apenas isso.
+- **Reais.** `flut` sai com `%.9g` e `duplocarpado` com `%.17g` (o mínimo que
+  volta ao mesmo valor binário). Os algarismos vêm da libc, que arredonda
+  corretamente no glibc, no printf ANSI do MinGW e no newlib da placa. O texto
+  é normalizado: NaN vira sempre `nan` (o glibc escreve `-nan`), `inf`/`-inf`,
+  expoente com 2 algarismos.
+- **Erro de execução.** A mesma linha do PC (`linha N: erro de execucao C:
+  mensagem`), pela serial, depois uma marca e o LED azul (GPIO2) piscando a
+  cada 250 ms para sempre. A placa não reinicia (isso repetiria o programa).
+- **Código 8, serviços da placa.** Uso inválido de pino ou espera (pino
+  inexistente, GPIO6 a 11 da flash, GPIO1/3 da serial, saída em GPIO34 a 39,
+  escrita sem `pinoModo`, espera negativa) dá `erro de execucao 8`, com o
+  texto da regra. As regras ficam em `zl_placa.h`, usadas pela placa e pela
+  simulação no PC, que dão o mesmo texto.
+- **Tarefa própria.** `zl_principal` roda numa tarefa FreeRTOS `macaronica`,
+  no núcleo 1, com pilha de `ZL_PILHA_BYTES` (64 KiB por padrão), e não na
+  tarefa do `loop()` do Arduino (8 KiB). O watchdog de tarefas vigia só o
+  ocioso do núcleo 0, então um cálculo longo não reinicia a placa.
+- **Marcas na serial.** `--- Macaronica: inicio do programa ---` antes e
+  `--- Macaronica: fim do programa, status N, pilha usada X de Y bytes ---`
+  depois. O script de captura compara só o que fica entre elas. A pilha usada
+  vem da marca d'água do FreeRTOS: é o número real da placa.
+- **Entrada.** Tokens separados por espaço, como no PC, lidos da serial. Na
+  placa não há fim de arquivo: a leitura espera o próximo byte.
+
+Verificação: `test-frontend` 88/88 e `test-c` 22/22 no Windows. O sketch do
+blink com o runtime completo compila e liga com o `arduino-cli` (nucleo
+esp32 3.3.11). `zl_runtime_esp32.c` e `zl_plataforma_idf.c` compilam com
+`-Wall -Wextra -Werror` no gcc Xtensa, contra os cabeçalhos do ESP-IDF 5.5.5
+do núcleo Arduino. **Não testado:** o build pela rota ESP-IDF (`idf.py`),
+porque o ESP-IDF não está instalado nesta máquina.
+
 ## Perguntas prováveis da arguição
 
 **Por que `int64_t` e não `long long`?** `int64_t` tem exatamente 64 bits em
@@ -90,3 +143,16 @@ baixos, igual ao `trunc` da IR.
 `int32_t` do runtime. Truncar daria 2 (o GPIO2, um pino válido). A conversão
 satura e entrega `INT32_MAX`, e o runtime responde com erro de pino
 inexistente.
+
+**Como vocês garantem que a placa imprime o mesmo que o PC?** O texto não é
+escrito duas vezes: o PC e a placa compilam o mesmo `zl_formato.h`. O que
+muda é só o destino (stdout/stderr no PC, serial na placa). Os `tests/placa`
+têm `.esperado` gerado no PC, e o script de captura compara com a serial.
+
+**Por que não usar `printf` direto na placa?** Daria o mesmo para inteiros,
+mas o `%lld` e o `-nan` variam entre bibliotecas C. Com `zl_formato.h` a
+conversão de inteiro é manual e os casos especiais dos reais são fixados.
+
+**O que acontece se o programa tentar usar o GPIO6?** Erro de execução 8,
+"pino reservado para a memoria flash". Esse pino liga a flash SPI: escrever
+nele trava a placa. Melhor recusar com mensagem do que travar.
