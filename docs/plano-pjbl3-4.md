@@ -233,13 +233,18 @@ Contratos entre frentes:
    no cabeçalho e no runtime POSIX (linguagem) e no runtime ESP32 (placa) no
    mesmo ciclo; a integração avisa a outra frente.
 4. **Mesma saída no PC e na placa:** impressão de cada tipo e mensagem de erro
-   de execução idênticas nos dois runtimes. A frente da placa garante isso e
-   pode mover o formato para um arquivo comum aos dois (`runtime/zl_formato.*`).
+   de execução idênticas nos dois runtimes. A frente da placa garante isso; o
+   formato comum aos dois está em `runtime/zl_formato.h`.
 5. **Núcleos MLIR:** nome e assinatura publicados em `docs/dsl.md` (atenção à
    convenção de chamada de `memref` depois do lowering, ou
    `llvm.emit_c_interface`); a frente de benchmark usa os mesmos.
 6. **Diagnósticos:** códigos novos seguem `docs/diagnosticos.md`; a DSL usa
    `E-DSL-nnn` e o alvo, `E-TGT-nnn`, para não colidir com `E-SEM`.
+7. **Códigos de erro de execução:** 1 a 7 são os da linguagem (`ZL_ERRO_*` em
+   `runtime/zl_runtime.h`, um teste cada em `tests/execucao/erros/`); 8 é
+   `ZL_ERRO_PLACA`, uso inválido de pino ou espera (`runtime/zl_placa.h`).
+   Código novo começa no 9 e é pedido à integração antes de usar, para duas
+   frentes não pegarem o mesmo número.
 
 Congelamento: domingo às 23h. Depois disso, só correção de bug com teste.
 
