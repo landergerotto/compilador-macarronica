@@ -1,4 +1,5 @@
 #include "codegen_llvm.h"
+#include "codegen_mlir.h" /* Frente dsl-mlir: nucleos da DSL vetorial. */
 
 #include <float.h>
 #include <inttypes.h>
@@ -469,10 +470,59 @@ static LlvmValue emit_unary(Codegen *gen, const AstNode *node)
     return result;
 }
 
+/*
+ * Frente dsl-mlir: a operacao vetorial vira uma chamada ao nucleo MLIR
+ * (docs/dsl.md, 6.2). Cada vetor vai como memref descido: ptr alocado, ptr
+ * alinhado, deslocamento 0, tamanho N e passo 1.
+ */
+static LlvmValue emit_dsl_operation(Codegen *gen, const AstNode *node)
+{
+    DslOperation operation;
+    DslArgument arguments[3];
+    LlvmValue result = value_empty(node->semantic.type_id);
+    LlvmValue scalar = result;
+    size_t count, index;
+    if (!dsl_describe(gen->semantic, node, &operation)) {
+        fail(gen, node, "E-IR-002", "operacao vetorial sem descricao da DSL");
+        return result;
+    }
+    if (operation.scalar != NULL)
+        scalar = convert_value(gen, emit_expression(gen, operation.scalar),
+                               operation.result_type_id, node);
+    count = dsl_kernel_arguments(&operation, arguments);
+    if (operation.target_id == SYMBOL_ID_NONE) {
+        result = new_temporary(gen, operation.result_type_id);
+        write_ir(gen, "  %s = call ", result.operand);
+        emit_type(gen, operation.result_type_id);
+    } else write_ir(gen, "  call void");
+    write_ir(gen, " @%s(", operation.kernel);
+    for (index = 0U; index < count; ++index) {
+        const Symbol *vector;
+        char address[64];
+        if (index != 0U) write_ir(gen, ", ");
+        if (arguments[index].is_scalar) {
+            emit_typed_value(gen, scalar);
+            continue;
+        }
+        vector = symbol_table_get(&gen->semantic->symbols, arguments[index].symbol_id);
+        if (vector == NULL) {
+            fail(gen, node, "E-IR-002", "vetor da DSL sem simbolo resolvido");
+            return result;
+        }
+        symbol_address(gen, vector, address, sizeof(address));
+        write_ir(gen, "ptr %s, ptr %s, i64 0, i64 %lld, i64 1", address, address,
+                 operation.length);
+    }
+    write_ir(gen, ")\n");
+    return result;
+}
+
 static LlvmValue emit_expression(Codegen *gen, const AstNode *node)
 {
     LlvmValue value = value_empty(node->semantic.type_id);
     if (gen->status != FRONTEND_STATUS_OK) return value;
+    if (node->kind == AST_CALL_EXPR && dsl_is_operation(node)) /* Frente dsl-mlir */
+        return emit_dsl_operation(gen, node);
     switch (node->kind) {
     case AST_LITERAL_EXPR:
         switch (node->as.literal_expr.literal_kind) {
@@ -637,6 +687,10 @@ static void emit_statement(Codegen *gen, const AstNode *node)
         node->kind != AST_VECTOR_DECL && node->span.start.line != gen->last_line) {
         write_ir(gen, "  ; linha %zu\n", node->span.start.line);
         gen->last_line = node->span.start.line;
+    }
+    if (node->kind == AST_ASSIGNMENT && dsl_is_operation(node)) { /* Frente dsl-mlir */
+        (void)emit_dsl_operation(gen, node);
+        return;
     }
     switch (node->kind) {
     case AST_BLOCK:
@@ -917,6 +971,10 @@ FrontendStatus codegen_llvm_emit(const SourceFile *source,
     visit_tree(&gen, program, 1);
     write_ir(&gen, "\n");
     emit_runtime_declarations(&gen);
+    /* Frente dsl-mlir: `declare` dos nucleos MLIR que o programa usa. */
+    if (gen.status == FRONTEND_STATUS_OK &&
+        !codegen_mlir_write_llvm_declarations(output, program, semantic))
+        fail(&gen, program, "E-IR-004", "falha ao declarar os nucleos da DSL");
     for (index = 0U; index < program->as.program.declarations.count; ++index) {
         const AstNode *declaration = program->as.program.declarations.items[index];
         if (declaration->kind == AST_FUNCTION_DECL) emit_function(&gen, declaration);

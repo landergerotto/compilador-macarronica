@@ -1,4 +1,5 @@
 #include "semantic.h"
+#include "dsl.h" /* Frente dsl-mlir */
 
 #include <float.h>
 #include <limits.h>
@@ -810,6 +811,25 @@ static size_t analyze_unary(SemanticAnalyzer *analyzer, AstNode *node)
     return result_type;
 }
 
+/* Frente dsl-mlir: a regra da DSL mora em dsl.c; aqui so o contexto. */
+static size_t dsl_analyze_scalar(void *analyzer, AstNode *node)
+{
+    return analyze_expression((SemanticAnalyzer *)analyzer, node, 0);
+}
+
+static DslContext dsl_context(SemanticAnalyzer *analyzer)
+{
+    DslContext context;
+    context.source = analyzer->source;
+    context.diagnostics = analyzer->diagnostics;
+    context.result = analyzer->result;
+    context.scope_id = analyzer->current_scope_id;
+    context.allocation_failed = &analyzer->allocation_failed;
+    context.analyzer = analyzer;
+    context.analyze_expression = dsl_analyze_scalar;
+    return context;
+}
+
 static size_t analyze_expression(SemanticAnalyzer *analyzer, AstNode *node,
                                  int allow_void_call)
 {
@@ -846,6 +866,10 @@ static size_t analyze_expression(SemanticAnalyzer *analyzer, AstNode *node,
                  (type_id == TYPE_ID_ERROR ? AST_SEMANTIC_ERROR : 0U));
         return type_id;
     case AST_CALL_EXPR:
+        if (dsl_is_reduction_call(analyzer->result, node)) { /* Frente dsl-mlir */
+            DslContext context = dsl_context(analyzer);
+            return dsl_analyze_reduction(&context, node, allow_void_call);
+        }
         return analyze_call(analyzer, node, allow_void_call);
     case AST_INDEX_EXPR:
         return analyze_index(analyzer, node);
@@ -865,8 +889,14 @@ static size_t analyze_expression(SemanticAnalyzer *analyzer, AstNode *node,
 
 static void analyze_assignment(SemanticAnalyzer *analyzer, AstNode *node)
 {
-    size_t target = analyze_expression(analyzer, node->as.assignment.target, 0);
-    size_t value = analyze_expression(analyzer, node->as.assignment.value, 0);
+    DslContext context = dsl_context(analyzer); /* Frente dsl-mlir */
+    size_t target, value;
+    if (dsl_claims_assignment(&context, node)) {
+        dsl_analyze_assignment(&context, node);
+        return;
+    }
+    target = analyze_expression(analyzer, node->as.assignment.target, 0);
+    value = analyze_expression(analyzer, node->as.assignment.value, 0);
     if ((node->as.assignment.target->semantic.flags & AST_SEMANTIC_LVALUE) == 0U &&
         target != TYPE_ID_ERROR) {
         semantic_error(analyzer, node->as.assignment.target->span, "E-SEM-019",
@@ -1297,6 +1327,7 @@ FrontendStatus semantic_analyze(const SourceFile *source,
                    source->path != NULL ? source->path : "<fonte>",
                    root->as.program.declarations.count);
     if (!declare_builtins(&analyzer) ||
+        !dsl_declare_builtins(result) || /* Frente dsl-mlir: somavet, maxvet, prodesc */
         !collect_record_names(&analyzer, root) ||
         !collect_function_signatures(&analyzer, root)) {
         return FRONTEND_STATUS_INTERNAL_ERROR;
