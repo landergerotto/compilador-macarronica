@@ -11,14 +11,22 @@
 #   make placa-gravar PROG=... PORT=COM4          compila e grava
 #   make placa-monitor PORT=COM4                  serial a 115200
 #   make placa-pc PROG=...                        mesmo C, rodando no PC
+#   make placa-testar [PROG=...] [PORT=COM4]      grava, le a serial e compara
+#                                                 com o .esperado (sem PROG:
+#                                                 todos os tests/placa/*.mac)
 #   PILHA=N  bytes da pilha da tarefa do programa (e o --ram-limite)
+#   PORT     na rota arduino o padrao e auto: a primeira placa USB conectada
 PROG ?= examples/esp32_blink.mac
-PORT ?= COM4
 ROTA ?= arduino
+ifeq ($(ROTA),arduino)
+PORT ?= auto
+else
+PORT ?= COM4
+endif
 PILHA ?= 65536
 IDF_PY ?= idf.py
 
-.PHONY: placa placa-gerar placa-gravar placa-monitor placa-pc
+.PHONY: placa placa-gerar placa-gravar placa-monitor placa-pc placa-testar
 
 placa-pc: $(RELEASE_TARGET)
 	"$(BASH)" tools/placa.sh pc "$(PROG)" "$(PILHA)" "$(RELEASE_TARGET)" "$(CC)"
@@ -35,6 +43,10 @@ placa-gravar: placa
 
 placa-monitor:
 	"$(BASH)" tools/placa.sh monitor "$(PORT)"
+
+PLACA_TESTES = $(if $(filter command line,$(origin PROG)),$(PROG),$(sort $(wildcard tests/placa/*.mac)))
+placa-testar: $(RELEASE_TARGET)
+	"$(BASH)" tools/placa.sh testar "$(PORT)" "$(PILHA)" "$(RELEASE_TARGET)" $(PLACA_TESTES)
 else ifeq ($(ROTA),idf)
 ifeq ($(EXEEXT),.exe)
 placa:

@@ -12,6 +12,8 @@
 #      tools/placa.sh gravar   PROG.mac PORTA
 #      tools/placa.sh monitor  PORTA
 #      tools/placa.sh pc       PROG.mac [PILHA] [COMPILADOR] [CC]
+#      tools/placa.sh testar   PORTA PILHA COMPILADOR PROG.mac...
+# PORTA: COMx ou /dev/ttyUSBx; auto (ou vazia) usa a primeira placa USB.
 # PILHA: bytes da pilha da tarefa que executa zl_principal (padrao 65536).
 # O mesmo numero vai para o --ram-limite do compilador e para o
 # -DZL_PILHA_BYTES do runtime, entao a verificacao de memoria e a tarefa da
@@ -35,7 +37,7 @@ falha() {
 }
 
 uso() {
-    sed -n '10,14p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
+    sed -n '10,16p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
     exit 2
 }
 
@@ -90,7 +92,21 @@ confere_pilha() {
 nome_do_programa() {
     local base
     base="$(basename "$1")"
-    printf '%s\n' "${base%.mac}"
+    base="${base%.mac}"
+    printf '%s\n' "${base%.mcn}"
+}
+
+# PORTA vazia ou auto: a primeira porta serial USB que o arduino-cli enxerga.
+acha_porta() {
+    local porta="${1:-auto}" ac
+    if [ "$porta" != auto ]; then
+        printf '%s\n' "$porta"
+        return
+    fi
+    ac="$(acha_arduino_cli)"
+    porta="$("$ac" board list 2>/dev/null | awk '/[Ss]erial/ && /USB/ { print $1; exit }')"
+    [ -n "$porta" ] || falha "nenhuma placa USB encontrada: conecte a placa ou passe PORT=COMx"
+    printf '%s\n' "$porta"
 }
 
 # Gera o C e monta o sketch em build/placa/<nome>/macaronica/.
@@ -184,6 +200,113 @@ monitor() {
     "$ac" monitor -p "$porta" -b "$FQBN" --config "baudrate=$BAUD"
 }
 
+NL='
+'
+MARCA_INICIO="--- Macaronica: inicio do programa ---$NL"
+MARCA_FIM="$NL--- Macaronica: fim do programa, status "
+MARCA_ERRO="$NL--- Macaronica: erro de execucao"
+
+# Le a serial da placa desde o boot (tools/serial.ps1 reinicia pelo RTS).
+capturar() {
+    local porta="$1" entrada="$2" segundos="$3" argumentos
+    case "$(uname -s)" in
+        MINGW* | MSYS* | CYGWIN*) ;;
+        *) falha "leitura automatica da serial so no Windows; use make placa-monitor" ;;
+    esac
+    argumentos=(-NoProfile -ExecutionPolicy Bypass -File "$(cygpath -w tools/serial.ps1)"
+                -Porta "$porta" -Segundos "$segundos")
+    [ -z "$entrada" ] || argumentos+=(-Entrada "$(cygpath -w "$entrada")")
+    powershell.exe "${argumentos[@]}"
+}
+
+# Grava um programa, le a serial e compara o que sai entre as marcas do
+# runtime com o .esperado (o erro com o .erro, o status com o .status), como
+# o teste diferencial faz no PC. Com .rejeita (linha "c-esp32 CODIGO") o
+# compilador precisa recusar o programa para a placa com aquele codigo.
+testar_um() {
+    local prog="$1" porta="$2" pilha="$3" compilador="$4"
+    local nome base dir codigo entrada bruto texto final status linha_erro esperado_erro
+    nome="$(nome_do_programa "$prog")"
+    base="${prog%.*}"
+    dir="build/placa/$nome"
+    mkdir -p "$dir"
+    codigo=
+    [ ! -f "$base.rejeita" ] || codigo="$(awk '$1 == "c-esp32" { print $2 }' "$base.rejeita")"
+    if [ -n "$codigo" ]; then
+        if "$compilador" --alvo=esp32 --ram-limite="$pilha" "$prog" -o "$dir/rejeitado.c" \
+            >"$dir/rejeita.log" 2>&1; then
+            printf 'FALHA %s: a placa devia recusar com %s\n' "$prog" "$codigo"
+            return 1
+        fi
+        if ! grep -q "$codigo" "$dir/rejeita.log"; then
+            printf 'FALHA %s: recusado, mas sem %s (%s/rejeita.log)\n' "$prog" "$codigo" "$dir"
+            return 1
+        fi
+        printf 'OK    %s (recusado para a placa com %s)\n' "$prog" "$codigo"
+        return 0
+    fi
+    if ! (compilar "$prog" "$pilha" "$compilador") >"$dir/compilar.log" 2>&1; then
+        printf 'FALHA %s: nao compilou (%s/compilar.log)\n' "$prog" "$dir"
+        return 1
+    fi
+    if ! (gravar "$prog" "$porta") >"$dir/gravar.log" 2>&1; then
+        printf 'FALHA %s: nao gravou em %s (%s/gravar.log)\n' "$prog" "$porta" "$dir"
+        return 1
+    fi
+    entrada=
+    [ ! -f "$base.in" ] || entrada="$base.in"
+    if ! capturar "$porta" "$entrada" "${SEGUNDOS:-20}" | tr -d '\r' >"placa/$nome/serial.txt"; then
+        printf 'FALHA %s: nao leu a serial em %s\n' "$prog" "$porta"
+        return 1
+    fi
+    bruto="$(cat "placa/$nome/serial.txt"; printf x)"
+    bruto="${bruto%x}"
+    if [[ "$bruto" != *"$MARCA_INICIO"* ]]; then
+        printf 'FALHA %s: a serial nao mostrou o inicio do programa (placa/%s/serial.txt)\n' "$prog" "$nome"
+        return 1
+    fi
+    texto="${bruto#*"$MARCA_INICIO"}"
+    linha_erro=
+    if [[ "$texto" == *"$MARCA_FIM"* ]]; then
+        final="${texto#*"$MARCA_FIM"}"
+        final="${final%%"$NL"*}"
+        status="${final%%,*}"
+        final="status ${final% ---}"
+        texto="${texto%%"$MARCA_FIM"*}"
+    elif [[ "$texto" == *"$MARCA_ERRO"* ]]; then
+        texto="${texto%%"$MARCA_ERRO"*}"
+        texto="${texto%"$NL"}"
+        linha_erro="${texto##*"$NL"}"
+        texto="${texto%"$linha_erro"}"
+        final="erro de execucao como o .erro"
+        status=1
+    else
+        printf 'FALHA %s: o programa nao terminou em %ss (placa/%s/serial.txt)\n' \
+            "$prog" "${SEGUNDOS:-20}" "$nome"
+        return 1
+    fi
+    printf '%s' "$texto" >"placa/$nome/saida.txt"
+    if ! cmp -s "placa/$nome/saida.txt" "$base.esperado"; then
+        printf 'FALHA %s: saida da placa difere do .esperado\n' "$prog"
+        diff "$base.esperado" "placa/$nome/saida.txt" | sed 's/^/      /' | head -n 20 || true
+        return 1
+    fi
+    if [ -f "$base.erro" ]; then
+        esperado_erro="$(head -n 1 "$base.erro" | tr -d '\r')"
+        if [[ -z "$linha_erro" || "$linha_erro" != "$esperado_erro"* ]]; then
+            printf 'FALHA %s: erro esperado "%s", a placa mostrou "%s"\n' "$prog" "$esperado_erro" "$linha_erro"
+            return 1
+        fi
+    elif [ -n "$linha_erro" ]; then
+        printf 'FALHA %s: erro de execucao inesperado: %s\n' "$prog" "$linha_erro"
+        return 1
+    elif [ "$(( status & 255 ))" -ne "$(cat "$base.status" 2>/dev/null || printf 0)" ]; then
+        printf 'FALHA %s: status %s, esperado %s\n' "$prog" "$status" "$(cat "$base.status" 2>/dev/null || printf 0)"
+        return 1
+    fi
+    printf 'OK    %s (%s)\n' "$prog" "$final"
+}
+
 # Roda no PC o mesmo C gerado para a placa, com o runtime POSIX e a simulacao
 # dos pinos (runtime/zl_placa_pc.c). A saida deve ser a do .esperado.
 pc() {
@@ -213,11 +336,32 @@ case "$acao" in
         ;;
     gravar)
         [ $# -ge 2 ] || uso
-        gravar "$1" "$2"
+        gravar "$1" "$(acha_porta "$2")"
         ;;
     monitor)
         [ $# -ge 1 ] || uso
-        monitor "$1"
+        monitor "$(acha_porta "$1")"
+        ;;
+    testar)
+        [ $# -ge 4 ] || uso
+        porta="$1"
+        pilha="$2"
+        confere_pilha "$pilha"
+        compilador="$(acha_compilador "$3")"
+        shift 3
+        precisa_placa=0
+        for prog in "$@"; do
+            [ -f "${prog%.*}.rejeita" ] || precisa_placa=1
+        done
+        [ "$precisa_placa" -eq 0 ] || porta="$(acha_porta "$porta")"
+        total=0
+        falhas=0
+        for prog in "$@"; do
+            total=$((total + 1))
+            testar_um "$prog" "$porta" "$pilha" "$compilador" || falhas=$((falhas + 1))
+        done
+        printf 'placa: %s programa(s), %s falha(s)\n' "$total" "$falhas"
+        [ "$falhas" -eq 0 ]
         ;;
     pc)
         [ $# -ge 1 ] || uso
