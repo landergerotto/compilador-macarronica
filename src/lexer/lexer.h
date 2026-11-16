@@ -10,10 +10,6 @@
 #include "../common/status.h"
 #include "token.h"
 
-#ifndef MACARONICA_LEXER_DEBUG
-#define MACARONICA_LEXER_DEBUG 1
-#endif
-
 /*
  * Le a fonte inteira e coloca os tokens em out_tokens. Mesmo quando encontra
  * algo errado, guarda TOKEN_INVALID, e no fim sempre coloca TOKEN_EOF.

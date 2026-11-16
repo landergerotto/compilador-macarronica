@@ -16,10 +16,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifndef MACARONICA_COMPILER_DEBUG
-#define MACARONICA_COMPILER_DEBUG 1
-#endif
-
 static void dump_tokens(const TokenBuffer *tokens, const char *path)
 {
     size_t index;
@@ -121,9 +117,6 @@ CompilerExitCode compiler_compile_file(const char *path,
         goto cleanup;
     }
 
-#if MACARONICA_COMPILER_DEBUG
-    (void)fprintf(stderr, "[debug][compiler] carregando `%s`\n", path); // debug - remover
-#endif
 
     if (!source_file_load(&source, path, io_error, sizeof(io_error))) {
         if (errno == ENOMEM) {

@@ -19,20 +19,6 @@ typedef struct {
     int allocation_failed;
 } SemanticAnalyzer;
 
-#if MACARONICA_SEMANTIC_DEBUG
-static void semantic_debug(const char *format, ...)
-{
-    va_list arguments;
-
-    va_start(arguments, format);
-    (void)fputs("[debug][semantic] ", stderr); // debug - remover
-    (void)vfprintf(stderr, format, arguments); // debug - remover
-    va_end(arguments);
-}
-#define SEMANTIC_DEBUG(...) semantic_debug(__VA_ARGS__)
-#else
-#define SEMANTIC_DEBUG(...) ((void)0)
-#endif
 
 static void annotate(AstNode *node, size_t type_id, size_t symbol_id,
                      unsigned int flags)
@@ -169,7 +155,6 @@ static int collect_record_names(SemanticAnalyzer *analyzer, AstNode *root)
                             analyzer->result->global_scope_id, &symbol_id)) continue;
         type_table_set_declaration_symbol(&analyzer->result->types, type_id, symbol_id);
         annotate(node, type_id, symbol_id, 0U);
-        SEMANTIC_DEBUG("registro coletado: %s\n", node->as.struct_decl.name);
     }
     return !analyzer->allocation_failed;
 }
@@ -287,9 +272,6 @@ static int collect_function_signatures(SemanticAnalyzer *analyzer, AstNode *root
                 analyzer->result->principal_symbol_id == SYMBOL_ID_NONE) {
                 analyzer->result->principal_symbol_id = symbol_id;
             }
-            SEMANTIC_DEBUG("assinatura coletada: %s/%zu\n",
-                           node->as.function_decl.name,
-                           parameter_count);
         } else {
             annotate(node, return_type, SYMBOL_ID_NONE, AST_SEMANTIC_ERROR);
         }
@@ -361,9 +343,6 @@ static void declare_value_names(SemanticAnalyzer *analyzer,
             }
             if (node->semantic.symbol_id == SYMBOL_ID_NONE)
                 node->semantic.symbol_id = symbol_id;
-            SEMANTIC_DEBUG("declarado %s '%s' no escopo %zu\n",
-                           symbol_category_name(declared_category), name->name,
-                           analyzer->current_scope_id);
         } else {
             name->symbol_id = SYMBOL_ID_NONE;
             node->semantic.flags |= AST_SEMANTIC_ERROR;
@@ -1276,7 +1255,6 @@ static void analyze_function(SemanticAnalyzer *analyzer, AstNode *node)
                                  analyzer->current_return_type_id));
         node->semantic.flags |= AST_SEMANTIC_ERROR;
     }
-    SEMANTIC_DEBUG("corpo analisado: %s\n", node->as.function_decl.name);
 
     analyzer->current_scope_id = old_scope;
     analyzer->current_function_id = old_function;
@@ -1336,9 +1314,6 @@ FrontendStatus semantic_analyze(const SourceFile *source,
     analyzer.current_return_type_id = TYPE_ID_ERROR;
     errors_before = diagnostics->error_count;
 
-    SEMANTIC_DEBUG("iniciando `%s` com %zu declaracoes\n",
-                   source->path != NULL ? source->path : "<fonte>",
-                   root->as.program.declarations.count);
     if (!declare_builtins(&analyzer) ||
         !collect_record_names(&analyzer, root) ||
         !collect_function_signatures(&analyzer, root)) {
@@ -1388,10 +1363,6 @@ FrontendStatus semantic_analyze(const SourceFile *source,
              diagnostics->error_count == errors_before
                  ? 0U : AST_SEMANTIC_ERROR);
     result->analyzed = !analyzer.allocation_failed;
-    SEMANTIC_DEBUG("fim: %zu simbolos, %zu escopos, %zu erro(s) novo(s)\n",
-                   result->symbols.count,
-                   result->symbols.scope_count,
-                   diagnostics->error_count - errors_before);
     if (analyzer.allocation_failed) {
         return FRONTEND_STATUS_INTERNAL_ERROR;
     }

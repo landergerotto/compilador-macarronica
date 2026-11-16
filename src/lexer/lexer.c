@@ -173,14 +173,6 @@ static int emit_token(Lexer *lexer, TokenKind kind, SourcePosition start, TokenL
         lexer->failed = 1;
         return 0;
     }
-#if MACARONICA_LEXER_DEBUG
-    (void)fprintf(stderr, "[debug][lexer] %zu:%zu %-18s `", // debug - remover
-                  start.line, start.column, token_kind_name(kind));
-    if (token.start != NULL && token.length > 0U) {
-        (void)fwrite(token.start, 1U, token.length, stderr); // debug - remover
-    }
-    (void)fputs("`\n", stderr); // debug - remover
-#endif
     return 1;
 }
 
@@ -546,20 +538,10 @@ FrontendStatus lexer_scan_all(const SourceFile *source,
     lexer.failed = 0;
     errors_before = diagnostics->error_count;
 
-#if MACARONICA_LEXER_DEBUG
-    (void)fprintf(stderr, "[debug][lexer] iniciando `%s` (%zu bytes)\n", // debug - remover
-                  source->path != NULL ? source->path : "<fonte>",
-                  source->length);
-#endif
     while (!at_end(&lexer) && !lexer.failed) {
         scan_token(&lexer);
     }
     (void)emit_token(&lexer, TOKEN_EOF, position(&lexer), literal);
-#if MACARONICA_LEXER_DEBUG
-    (void)fprintf(stderr, "[debug][lexer] fim: %zu tokens, %zu erro(s) novo(s)\n", // debug - remover
-                  out_tokens->count,
-                  diagnostics->error_count - errors_before);
-#endif
     if (lexer.failed) {
         return FRONTEND_STATUS_INTERNAL_ERROR;
     }

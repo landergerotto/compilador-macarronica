@@ -230,11 +230,6 @@ static AstNode *new_node(Parser *parser, AstKind kind, SourceSpan span)
         out_of_memory(parser);
         return NULL;
     }
-#if MACARONICA_PARSER_DEBUG
-    (void)fprintf(stderr, "[debug][parser] no %zu: %s em %zu:%zu\n", // debug - remover
-                  node->node_id, ast_kind_name(kind),
-                  span.start.line, span.start.column);
-#endif
     return node;
 }
 
@@ -969,10 +964,6 @@ static int looks_like_local_declaration(const Parser *parser)
 
 static AstNode *parse_statement(Parser *parser)
 {
-#if MACARONICA_PARSER_DEBUG
-    (void)fprintf(stderr, "[debug][parser] comando inicia com %s\n", // debug - remover
-                  token_kind_name(current_token(parser)->kind));
-#endif
     if (looks_like_local_declaration(parser)) return parse_value_declaration(parser, 0);
     if (check(parser, TOKEN_IDENTIFIER)) return parse_identifier_statement(parser);
     if (check(parser, TOKEN_KW_REPETE)) return parse_for(parser);
@@ -1348,10 +1339,6 @@ static AstNode *parse_global(Parser *parser)
 {
     SourcePosition start = current_token(parser)->span.start;
     AstTypeRef type;
-#if MACARONICA_PARSER_DEBUG
-    (void)fprintf(stderr, "[debug][parser] declaracao global inicia com %s\n", // debug - remover
-                  token_kind_name(current_token(parser)->kind));
-#endif
     if (check(parser, TOKEN_KW_REGISTRO)) return parse_struct(parser);
     if (match(parser, TOKEN_KW_OUTRAFUNCAO)) {
         if (!parse_type(parser, 1, &type)) return NULL;
@@ -1433,11 +1420,6 @@ FrontendStatus parser_parse(const SourceFile *source,
         if (tokens->items[index].kind == TOKEN_LEFT_BRACKET) ++parser.bracket_balance;
         else if (tokens->items[index].kind == TOKEN_RIGHT_BRACKET) --parser.bracket_balance;
     }
-#if MACARONICA_PARSER_DEBUG
-    (void)fprintf(stderr, "[debug][parser] iniciando `%s` com %zu tokens\n", // debug - remover
-                  source->path != NULL ? source->path : "<fonte>",
-                  tokens->count);
-#endif
     program = new_node(&parser, AST_PROGRAM, parser.synthetic_eof.span);
     if (program == NULL) return FRONTEND_STATUS_INTERNAL_ERROR;
     if (tokens->count > 0U) program->span.start = tokens->items[0].span.start;
@@ -1454,11 +1436,6 @@ FrontendStatus parser_parse(const SourceFile *source,
     }
     program->span.end = current_token(&parser)->span.end;
     *out_program = program;
-#if MACARONICA_PARSER_DEBUG
-    (void)fprintf(stderr, "[debug][parser] fim: %zu declaracoes, %zu erro(s) novo(s)\n", // debug - remover
-                  program->as.program.declarations.count,
-                  diagnostics->error_count - errors_before);
-#endif
     if (parser.allocation_failed) {
         return FRONTEND_STATUS_INTERNAL_ERROR;
     }
