@@ -1,0 +1,4 @@
+tests/placa/07_entrada.mac: C99 gerado em build/placa/07_entrada/pc/programa.c
+soma: 18
+produto: -360
+x: 2.5

@@ -1,0 +1,11 @@
+inteira principal() @
+[
+    pinoModo(2, 1);
+    pinoEscreve(2, VER);
+    imprimePalavra("GPIO2 configurado como saida");
+    imprimeNl();
+    pinoEscreve(4, VER);
+    imprimePalavra("nao chega aqui");
+    imprimeNl();
+    respost 0;
+]

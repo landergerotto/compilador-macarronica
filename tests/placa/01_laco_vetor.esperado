@@ -1,0 +1,4 @@
+tests/placa/01_laco_vetor.mac: C99 gerado em build/placa/01_laco_vetor/pc/programa.c
+0 1 4 9 16 25 36 49 64 81 
+soma dos quadrados: 285
+ultimo dobro: 18

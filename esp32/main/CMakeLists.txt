@@ -8,5 +8,7 @@ idf_component_register(
     INCLUDE_DIRS "../../runtime"
     REQUIRES esp_driver_gpio esp_driver_uart freertos
 )
+# Sem fundir a*b+c em madd.s: os flut saem iguais aos do PC (como na rota Arduino).
+target_compile_options(${COMPONENT_LIB} PRIVATE -ffp-contract=off)
 set_property(TARGET ${COMPONENT_LIB} PROPERTY C_STANDARD 99)
 set_property(TARGET ${COMPONENT_LIB} PROPERTY C_STANDARD_REQUIRED ON)

@@ -1,0 +1,2 @@
+tests/placa/05_erro_pino.mac: C99 gerado em build/placa/05_erro_pino/pc/programa.c
+GPIO2 configurado como saida
