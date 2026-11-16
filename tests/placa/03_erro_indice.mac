@@ -1,0 +1,14 @@
+inteira principal() @
+[
+    inteira vet{3} valores;
+    inteira i;
+    repete (i receba 0, i < 4, i receba i + 1) edai
+    [
+        valores{i} receba i * 10;
+        imprimeInteira(valores{i});
+        imprimeNl();
+    ]
+    imprimePalavra("nao chega aqui");
+    imprimeNl();
+    respost 0;
+]

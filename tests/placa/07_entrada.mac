@@ -1,0 +1,18 @@
+inteira principal() @
+[
+    inteira a, b;
+    duplocarpado x;
+    a receba leInteira();
+    b receba leInteira();
+    x receba leDuplocarpado();
+    imprimePalavra("soma: ");
+    imprimeInteira(a + b);
+    imprimeNl();
+    imprimePalavra("produto: ");
+    imprimeInteira(a * b);
+    imprimeNl();
+    imprimePalavra("x: ");
+    imprimeDuplocarpado(x);
+    imprimeNl();
+    respost 0;
+]

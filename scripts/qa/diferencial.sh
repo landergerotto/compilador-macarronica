@@ -10,7 +10,7 @@
 #            runtime POSIX em bitcode -> lli               (precisa do LLVM 18)
 #   clang    o mesmo .ll + runtime POSIX, compilados pelo clang (nativo)
 #   c-esp32  --alvo=esp32 (o mesmo C que vai para a placa) + runtime POSIX +
-#            stub de GPIO (scripts/qa/gpio_host.c), compilados pelo cc do PC
+#            simulacao dos pinos (runtime/zl_placa_pc.c, a mesma do make placa-pc), compilados pelo cc do PC
 #   c-host   --emit-c (rota C do PC) + runtime POSIX
 #
 # Arquivos de cada programa P.mcn (ou P.mac):
@@ -28,8 +28,8 @@
 # Uso:
 #   scripts/qa/diferencial.sh [-c compilador] [--cc gcc] [--rotas "lli clang"]
 #                             [--exigir-llvm] [--manter pasta] [arquivo|pasta ...]
-# Sem arquivos: tests/professor, tests/qa, tests/qa/ensaio, tests/execucao e
-# tests/execucao/erros.
+# Sem arquivos: tests/professor, tests/qa, tests/qa/ensaio, tests/execucao,
+# tests/execucao/erros e tests/placa.
 # Saida: uma linha OK/FALHA por programa, diffs das falhas e um resumo final.
 # Codigo de saida: 0 se tudo passou, 1 se algo falhou, 2 se o uso estiver errado.
 
@@ -128,7 +128,7 @@ for f in "$llvm_as" "$llvm_opt" "$llvm_link" "$llvm_lli" "$llvm_clang"; do
     command -v "$f" >/dev/null 2>&1 || llvm_ok=0
 done
 runtime_c="$raiz/runtime/zl_runtime_posix.c"
-gpio_stub="$qa_dir/gpio_host.c"
+gpio_stub="$raiz/runtime/zl_placa_pc.c"
 runtime_bc="$tmp/zl_runtime_posix.bc"
 if [ "$llvm_ok" -eq 1 ] && [ "$windows" -eq 0 ]; then
     if ! "$llvm_clang" -std=c99 -O0 -emit-llvm -c "$runtime_c" -o "$runtime_bc" 2>"$tmp/rt.err"; then
@@ -170,7 +170,7 @@ printf 'compilador: %s\ncc: %s\nrotas: %s\n\n' "$compilador" "$cc" "${rotas_ativ
 # --- lista de programas -----------------------------------------------------------
 if [ "${#alvos[@]}" -eq 0 ]; then
     alvos=("$raiz/tests/professor" "$raiz/tests/qa" "$raiz/tests/qa/ensaio"
-           "$raiz/tests/execucao" "$raiz/tests/execucao/erros")
+           "$raiz/tests/execucao" "$raiz/tests/execucao/erros" "$raiz/tests/placa")
 fi
 programas=()
 for alvo in "${alvos[@]}"; do

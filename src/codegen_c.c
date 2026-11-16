@@ -678,6 +678,13 @@ FrontendStatus codegen_c_emit(const SourceFile *source, const AstNode *program,
     gen.status = FRONTEND_STATUS_OK;
     c_write(&gen, "/* Macaronica: C99 gerado automaticamente da AST anotada. */\n"
                   "#include <stdint.h>\n#include <limits.h>\n#include \"zl_runtime.h\"\n\n"
+                  "/* zl_erro_execucao nao retorna (como o noreturn da IR). Sem isso,\n"
+                  " * com otimizacao o gcc trata o acesso logo depois da checagem de\n"
+                  " * indice como alcancavel e pode usar o comportamento indefinido\n"
+                  " * dele para tirar a checagem do laco (-Waggressive-loop-optimizations). */\n"
+                  "#if defined(__GNUC__)\n"
+                  "void zl_erro_execucao(int32_t codigo, int32_t linha) __attribute__((noreturn));\n"
+                  "#endif\n\n"
                   "/* inteira = int64_t. A conta inteira e feita em uint64_t (modulo\n"
                   " * 2^64) e volta a int64_t sem conversao fora da faixa, que em C\n"
                   " * dependeria do compilador. */\n"

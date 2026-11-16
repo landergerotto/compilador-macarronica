@@ -1,0 +1,21 @@
+inteira principal() @
+[
+    inteira i;
+    pinoModo(2, 1);
+    pinoModo(0, 2);
+    repete (i receba 1, i < 6, i receba i + 1) edai
+    [
+        pinoEscreve(2, VER);
+        imprimePalavra("piscada ");
+        imprimeInteira(i);
+        imprimePalavra(": LED azul aceso");
+        imprimeNl();
+        espera(300);
+        pinoEscreve(2, FAL);
+        espera(300);
+    ]
+    imprimePalavra("botao BOOT solto (GPIO0 com pull-up): ");
+    imprimeBool(pinoLe(0));
+    imprimeNl();
+    respost 0;
+]

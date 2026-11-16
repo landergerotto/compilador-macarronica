@@ -1,0 +1,36 @@
+inteira vet{10} quadrados;
+
+outrafuncao inteira soma(inteira n) @
+[
+    inteira i, total;
+    total receba 0;
+    repete (i receba 0, i < n, i receba i + 1) edai
+    [
+        total receba total + quadrados{i};
+    ]
+    respost total;
+]
+
+inteira principal() @
+[
+    inteira i;
+    inteira vet{10} dobros;
+    repete (i receba 0, i < 10, i receba i + 1) edai
+    [
+        quadrados{i} receba i * i;
+        dobros{i} receba 2 * i;
+    ]
+    repete (i receba 0, i < 10, i receba i + 1) edai
+    [
+        imprimeInteira(quadrados{i});
+        imprimePalavra(" ");
+    ]
+    imprimeNl();
+    imprimePalavra("soma dos quadrados: ");
+    imprimeInteira(soma(10));
+    imprimeNl();
+    imprimePalavra("ultimo dobro: ");
+    imprimeInteira(dobros{9});
+    imprimeNl();
+    respost 0;
+]

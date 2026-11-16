@@ -16,7 +16,14 @@ extern "C" {
 
 /* Pilha, em bytes, da tarefa FreeRTOS que executa zl_principal. Deve ser o
  * mesmo numero do --ram-limite do compilador: e nela que ficam as variaveis
- * locais (e os vetores locais) de cada funcao Macaronica. */
+ * locais (e os vetores locais) de cada funcao Macaronica. A rota Arduino
+ * (tools/placa.sh) escreve o numero em zl_config.h, no sketch; sem esse
+ * arquivo (rota ESP-IDF) vale o padrao. */
+#if defined(__has_include)
+#if __has_include("zl_config.h")
+#include "zl_config.h"
+#endif
+#endif
 #ifndef ZL_PILHA_BYTES
 #define ZL_PILHA_BYTES 65536
 #endif
