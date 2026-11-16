@@ -1,0 +1,39 @@
+outrafuncao bool implica(bool a, bool b) @
+[
+    respost NÃO a OU b;
+]
+
+inteira principal() @
+[
+    bool a, b;
+    inteira i, j, verdadeiros;
+    repete (i receba 0, i < 2, i receba i + 1) edai
+    [
+        repete (j receba 0, j < 2, j receba j + 1) edai
+        [
+            a receba i == 1;
+            b receba j == 1;
+            imprimeBool(a);
+            imprimePalavra(" ");
+            imprimeBool(b);
+            imprimePalavra(": ");
+            imprimeBool(a E b);
+            imprimePalavra(" ");
+            imprimeBool(a OU b);
+            imprimePalavra(" ");
+            imprimeBool(a XOR b);
+            imprimePalavra(" ");
+            imprimeBool(implica(a, b));
+            imprimePalavra(" ");
+            imprimeBool(a == b);
+            imprimePalavra(" ");
+            imprimeBool(a ! b);
+            imprimeNl();
+            cond (implica(a, b)) edai [ verdadeiros receba verdadeiros + 1; ]
+        ]
+    ]
+    imprimeBool(NÃO NÃO VER);
+    imprimeBool(NÃO VER == FAL);
+    imprimeNl();
+    respost verdadeiros;
+]

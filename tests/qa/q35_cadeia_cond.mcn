@@ -1,0 +1,47 @@
+outrafuncao palavra classifica(inteira n) @
+[
+    cond (n < 0) edai [ respost "negativo"; ]
+    casocontrario cond (n == 0) edai [ respost "zero"; ]
+    casocontrario cond (n < 10) edai [ respost "unidade"; ]
+    casocontrario cond (n < 100) edai
+    [
+        cond (n // 10 * 10 == n) edai [ respost "dezena redonda"; ]
+        casocontrario edai [ respost "dezena"; ]
+    ]
+    casocontrario edai [ respost "grande"; ]
+]
+
+outrafuncao inteira nota(inteira pontos) @
+[
+    inteira conceito;
+    cond (pontos > 89) edai [ conceito receba 5; ]
+    casocontrario cond (pontos > 74) edai [ conceito receba 4; ]
+    casocontrario cond (pontos > 59) edai [ conceito receba 3; ]
+    casocontrario cond (pontos > 39) edai [ conceito receba 2; ]
+    casocontrario edai [ conceito receba 1; ]
+    respost conceito;
+]
+
+inteira principal() @
+[
+    inteira vet{7} valores;
+    inteira i, soma;
+    valores{0} receba -5;
+    valores{1} receba 0;
+    valores{2} receba 7;
+    valores{3} receba 40;
+    valores{4} receba 41;
+    valores{5} receba 100;
+    valores{6} receba 99;
+    repete (i receba 0, i < 7, i receba i + 1) edai
+    [
+        imprimeInteira(valores{i});
+        imprimePalavra(": ");
+        imprimePalavra(classifica(valores{i}));
+        imprimePalavra(" nota ");
+        imprimeInteira(nota(valores{i}));
+        imprimeNl();
+        soma receba soma + nota(valores{i});
+    ]
+    respost soma;
+]

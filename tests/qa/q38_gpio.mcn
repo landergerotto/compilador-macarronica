@@ -1,0 +1,19 @@
+vazio principal() @
+[
+    inteira i;
+    bool lido;
+    pinoModo(2, 1);
+    pinoModo(4, 0);
+    repete (i receba 0, i < 3, i receba i + 1) edai
+    [
+        pinoEscreve(2, VER);
+        espera(10);
+        pinoEscreve(2, FAL);
+        espera(10);
+    ]
+    lido receba pinoLe(4);
+    imprimeBool(lido);
+    imprimeNl();
+    imprimeInteira(i);
+    imprimeNl();
+]

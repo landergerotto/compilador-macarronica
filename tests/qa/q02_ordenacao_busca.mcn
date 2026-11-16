@@ -1,0 +1,79 @@
+inteira vet{10} dados;
+inteira tamanho;
+
+outrafuncao vazio preenche() @
+[
+    inteira i, semente;
+    semente receba 7;
+    tamanho receba 10;
+    repete (i receba 0, i < tamanho, i receba i + 1) edai
+    [
+        semente receba (semente * 31 + 11) - (semente * 31 + 11) // 97 * 97;
+        dados{i} receba semente;
+    ]
+]
+
+outrafuncao vazio ordena() @
+[
+    inteira i, j, chave;
+    repete (i receba 1, i < tamanho, i receba i + 1) edai
+    [
+        chave receba dados{i};
+        j receba i - 1;
+        durante (j > -1 E dados{j} > chave) edai
+        [
+            dados{j + 1} receba dados{j};
+            j receba j - 1;
+        ]
+        dados{j + 1} receba chave;
+    ]
+]
+
+outrafuncao inteira busca(inteira alvo) @
+[
+    inteira inicio, fim, meio;
+    inicio receba 0;
+    fim receba tamanho - 1;
+    durante (NÃO inicio > fim) edai
+    [
+        meio receba (inicio + fim) // 2;
+        cond (dados{meio} == alvo) edai [ respost meio; ]
+        casocontrario cond (dados{meio} < alvo) edai [ inicio receba meio + 1; ]
+        casocontrario edai [ fim receba meio - 1; ]
+    ]
+    respost -1;
+]
+
+inteira principal() @
+[
+    inteira i, achados;
+    preenche();
+    ordena();
+    imprimePalavra("ordenado:");
+    repete (i receba 0, i < tamanho, i receba i + 1) edai
+    [
+        imprimePalavra(" ");
+        imprimeInteira(dados{i});
+    ]
+    imprimeNl();
+    imprimeInteira(busca(18));
+    imprimePalavra(" ");
+    imprimeInteira(busca(95));
+    imprimePalavra(" ");
+    imprimeInteira(busca(37));
+    imprimePalavra(" ");
+    imprimeInteira(busca(36));
+    imprimePalavra(" ");
+    imprimeInteira(busca(0));
+    imprimePalavra(" ");
+    imprimeInteira(busca(100));
+    imprimeNl();
+    achados receba 0;
+    repete (i receba 0, i < 100, i receba i + 1) edai
+    [
+        cond (busca(i) > -1) edai [ achados receba achados + 1; ]
+    ]
+    imprimeInteira(achados);
+    imprimeNl();
+    respost dados{0} + dados{9};
+]

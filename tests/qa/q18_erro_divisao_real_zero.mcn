@@ -1,0 +1,13 @@
+inteira principal() @
+[
+    duplocarpado a, b;
+    flut x;
+    x receba 1.0;
+    imprimeFlut(x / 4.0);
+    imprimeNl();
+    a receba 1;
+    b receba -0.0;
+    imprimeDuplocarpado(a / b);
+    imprimeNl();
+    respost 0;
+]

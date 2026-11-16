@@ -1,0 +1,90 @@
+inteira chamadas;
+
+outrafuncao inteira fatorial(inteira n) @
+[
+    cond (n < 2) edai [ respost 1; ]
+    casocontrario edai [ respost n * fatorial(n - 1); ]
+]
+
+outrafuncao inteira fib(inteira n) @
+[
+    chamadas receba chamadas + 1;
+    cond (n < 2) edai [ respost n; ]
+    casocontrario edai [ respost fib(n - 1) + fib(n - 2); ]
+]
+
+outrafuncao inteira mdc(inteira a, inteira b) @
+[
+    cond (b == 0) edai [ respost a; ]
+    casocontrario edai [ respost mdc(b, a - a // b * b); ]
+]
+
+outrafuncao inteira ack(inteira m, inteira n) @
+[
+    cond (m == 0) edai [ respost n + 1; ]
+    casocontrario cond (n == 0) edai [ respost ack(m - 1, 1); ]
+    casocontrario edai [ respost ack(m - 1, ack(m, n - 1)); ]
+]
+
+outrafuncao bool par(inteira n) @
+[
+    cond (n == 0) edai [ respost VER; ]
+    casocontrario edai [ respost impar(n - 1); ]
+]
+
+outrafuncao bool impar(inteira n) @
+[
+    cond (n == 0) edai [ respost FAL; ]
+    casocontrario edai [ respost par(n - 1); ]
+]
+
+outrafuncao inteira hanoi(inteira n) @
+[
+    cond (n == 0) edai [ respost 0; ]
+    casocontrario edai [ respost 2 * hanoi(n - 1) + 1; ]
+]
+
+outrafuncao inteira somaDigitos(inteira n) @
+[
+    cond (n < 10) edai [ respost n; ]
+    casocontrario edai [ respost n - n // 10 * 10 + somaDigitos(n // 10); ]
+]
+
+outrafuncao duplocarpado potencia(duplocarpado base, inteira e) @
+[
+    cond (e == 0) edai [ respost 1; ]
+    casocontrario edai [ respost base * potencia(base, e - 1); ]
+]
+
+inteira principal() @
+[
+    imprimeInteira(fatorial(20));
+    imprimeNl();
+    imprimeInteira(fatorial(21));
+    imprimeNl();
+    imprimeInteira(fib(20));
+    imprimePalavra(" chamadas ");
+    imprimeInteira(chamadas);
+    imprimeNl();
+    imprimeInteira(mdc(1071, 462));
+    imprimePalavra(" ");
+    imprimeInteira(mdc(17, 5));
+    imprimePalavra(" ");
+    imprimeInteira(mdc(0, 9));
+    imprimeNl();
+    imprimeInteira(ack(2, 3));
+    imprimePalavra(" ");
+    imprimeInteira(ack(3, 3));
+    imprimeNl();
+    imprimeBool(par(10));
+    imprimeBool(impar(7));
+    imprimeBool(par(7));
+    imprimeNl();
+    imprimeInteira(hanoi(10));
+    imprimeNl();
+    imprimeInteira(somaDigitos(9876543210));
+    imprimeNl();
+    imprimeDuplocarpado(potencia(1.5, 10));
+    imprimeNl();
+    respost mdc(fatorial(6), 84);
+]

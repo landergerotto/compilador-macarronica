@@ -1,0 +1,49 @@
+inteira contador;
+
+outrafuncao vazio contaAte(inteira limite) @
+[
+    inteira i;
+    repete (i receba 0, i < 100, i receba i + 1) edai
+    [
+        cond (i == limite) edai [ respost; ]
+        contador receba contador + 1;
+    ]
+    imprimePalavra("nunca chega aqui");
+]
+
+outrafuncao vazio talvez(bool sai) @
+[
+    cond (sai) edai [ respost; ]
+    imprimePalavra("continuou;");
+]
+
+outrafuncao inteira primeiroNegativo(inteira a, inteira b, inteira c) @
+[
+    cond (a < 0) edai [ respost 1; ]
+    cond (b < 0) edai [ respost 2; ]
+    cond (c < 0) edai [ respost 3; ]
+    respost 0;
+]
+
+vazio principal() @
+[
+    contaAte(5);
+    imprimeInteira(contador);
+    imprimeNl();
+    contaAte(0);
+    imprimeInteira(contador);
+    imprimeNl();
+    talvez(VER);
+    talvez(FAL);
+    talvez(VER);
+    talvez(FAL);
+    imprimeNl();
+    imprimeInteira(primeiroNegativo(1, -2, -3));
+    imprimeInteira(primeiroNegativo(1, 2, -3));
+    imprimeInteira(primeiroNegativo(1, 2, 3));
+    imprimeInteira(primeiroNegativo(-1, 2, 3));
+    imprimeNl();
+    respost;
+    imprimePalavra("depois do respost");
+    imprimeNl();
+]
