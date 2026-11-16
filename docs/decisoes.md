@@ -93,13 +93,13 @@ As revisões para o PjBL 3 foram decididas pelo projeto para cumprir o escopo so
 1. **Regra oficial:** `//` é divisão inteira, `^` é potência, `raiz` é raiz quadrada, `XOR` é lógico e `!` é comparador de diferença. A fonte não especifica domínios e tipos resultantes.
 2. **Lacuna:** sem essas regras, a verificação de tipos não é determinística.
 3. **Decisão do projeto:**
-   - `+`, `-` e `*`: dois operandos do mesmo tipo numérico; resultado do mesmo tipo;
-   - `/`: dois operandos do mesmo tipo `flut` ou `duplocarpado`; resultado do mesmo tipo;
-   - `//`: dois operandos `inteira`; quociente truncado em direção a zero e resultado `inteira`;
-   - `^`: base e expoente do mesmo tipo numérico; resultado desse tipo; associa à direita;
-   - `raiz(expr)`: operando `flut` ou `duplocarpado`; resultado do mesmo tipo;
-   - `<` e `>`: operandos do mesmo tipo numérico; resultado `bool`;
-   - `==` e `!`: operandos escalares de mesmo tipo; resultado `bool`; `!` é binário e significa diferente;
+   - `+`, `-` e `*`: dois operandos numéricos; a conta é feita no tipo comum (D-012) e o resultado tem esse tipo;
+   - `/`: divisão real; dois operandos numéricos convertidos para o tipo comum, ou para `duplocarpado` se os dois forem `inteira`; resultado real;
+   - `//`: dois operandos `inteira`; quociente truncado em direção a zero e resultado `inteira`; operando real é erro semântico;
+   - `^`: base e expoente numéricos convertidos para o tipo comum; resultado desse tipo (`inteira ^ inteira` é `inteira`); associa à direita;
+   - `raiz(expr)`: operando numérico; `flut` e `duplocarpado` mantêm o tipo e `inteira` é calculada em `duplocarpado`;
+   - `<` e `>`: operandos numéricos comparados no tipo comum; resultado `bool`;
+   - `==` e `!`: operandos numéricos (no tipo comum) ou escalares de mesmo tipo; resultado `bool`; `!` é binário e significa diferente;
    - `NÃO`: um `bool`; resultado `bool`;
    - `E`, `OU` e `XOR`: dois `bool`; resultado `bool`.
 
@@ -110,8 +110,8 @@ As revisões para o PjBL 3 foram decididas pelo projeto para cumprir o escopo so
 
 1. **Regra oficial:** não há regra de conversão entre `inteira`, `flut` e `duplocarpado`.
 2. **Lacuna:** não se sabe se atribuições, argumentos, retornos ou operadores promovem tipos.
-3. **Decisao do projeto (revisada com aprovacao do usuario):** atribuicoes, argumentos e retornos aceitam tipos identicos e as promocoes `inteira -> flut`, `inteira -> duplocarpado` e `flut -> duplocarpado`. Conversoes inversas, casts explicitos e promocao entre operandos de operadores nao sao aceitos. Vetores e registros nao ganham conversao estrutural; elementos numericos de vetores seguem a regra escalar. Inteiros grandes podem sofrer arredondamento ao serem convertidos para ponto flutuante.
-4. **Impacto:** a expressão mantém seu tipo original na AST. O destino da atribuição, o parâmetro da assinatura ou o retorno declarado fornece o tipo esperado. O gerador LLVM compara esses tipos e emite `sitofp` para inteiro -> ponto flutuante e `fpext` para flut -> duplocarpado. Inteira -> duplocarpado é direta, sem passar por flut. As conversões são explícitas nas instruções LLVM; isso não cria sintaxe de cast na fonte. Testes de execução devem verificar atribuição, argumento e retorno, inclusive arredondamento de `inteira -> flut`.
+3. **Decisao do projeto (revisada com aprovacao do usuario):** atribuicoes, argumentos e retornos aceitam tipos identicos e as promocoes `inteira -> flut`, `inteira -> duplocarpado` e `flut -> duplocarpado`. Conversoes inversas e casts explicitos nao sao aceitos. **Revisao no PjBL 3** (enunciado, Secao 4.3): operadores binarios aceitam expressoes mistas; o tipo comum e o mais largo dos dois na ordem `inteira < flut < duplocarpado` e o operando de menor ordem e convertido para ele antes da conta (detalhes por operador em D-011 e em `decisoes_backend.md`). Vetores e registros nao ganham conversao estrutural; elementos numericos de vetores seguem a regra escalar. Inteiros grandes podem sofrer arredondamento ao serem convertidos para ponto flutuante.
+4. **Impacto:** a expressão mantém seu tipo original na AST; num operador misto, a semântica grava o tipo comum em `semantic.conversion_type_id`. O destino da atribuição, o parâmetro da assinatura ou o retorno declarado fornece o tipo esperado. O gerador LLVM compara esses tipos e emite `sitofp` para inteiro -> ponto flutuante e `fpext` para flut -> duplocarpado. Inteira -> duplocarpado é direta, sem passar por flut. As conversões são explícitas nas instruções LLVM; isso não cria sintaxe de cast na fonte. Testes de execução devem verificar atribuição, argumento e retorno, inclusive arredondamento de `inteira -> flut`.
 
 ## D-013 - Registros
 

@@ -227,8 +227,26 @@ int type_is_assignable(size_t target_type_id, size_t value_type_id)
     if (target_type_id == value_type_id) {
         return 1;
     }
-    /* Promocoes apenas no destino: operadores mantem suas regras proprias. */
+    /* So promocoes que nao estreitam: nunca duplocarpado -> flut (fptrunc). */
     return (value_type_id == TYPE_ID_INTEGER &&
             (target_type_id == TYPE_ID_FLOAT || target_type_id == TYPE_ID_DOUBLE)) ||
            (value_type_id == TYPE_ID_FLOAT && target_type_id == TYPE_ID_DOUBLE);
+}
+
+static int numeric_rank(size_t type_id)
+{
+    switch (type_id) {
+    case TYPE_ID_INTEGER: return 1;
+    case TYPE_ID_FLOAT: return 2;
+    case TYPE_ID_DOUBLE: return 3;
+    default: return 0;
+    }
+}
+
+size_t type_numeric_common(size_t left_type_id, size_t right_type_id)
+{
+    int left_rank = numeric_rank(left_type_id);
+    int right_rank = numeric_rank(right_type_id);
+    if (left_rank == 0 || right_rank == 0) return TYPE_ID_ERROR;
+    return left_rank >= right_rank ? left_type_id : right_type_id;
 }

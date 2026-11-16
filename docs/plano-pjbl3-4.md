@@ -267,10 +267,10 @@ Congelamento: domingo às 23h. Depois disso, só correção de bug com teste.
 | Cascatas de erro | ainda ocorrem | linguagem (2) |
 | `make` gera build de debug com `[debug]` no `stderr` | **corrigido**: `make` agora gera o release | — |
 | 13 linhas `// debug - remover` | ainda | linguagem (3) |
-| Sem promoção: `2.0 ^ 2`, `f + 1` | atribuição já promove; expressão ainda não | linguagem (4) |
+| Sem promoção: `2.0 ^ 2`, `f + 1` | **corrigido**: expressões mistas com tipo comum (D-012) | — |
 | Fim de linha CRLF | **corrigido**: `.gitattributes` com LF | — |
-| Aviso de fluxo Git no README | ainda | integração (README) |
-| Declaração de uso de IA fora do modelo do Plano de Ensino | ainda | integração (README) |
+| Aviso de fluxo Git no README | **corrigido**: foi para `docs/fluxo-git.md` | — |
+| Declaração de uso de IA fora do modelo do Plano de Ensino | **corrigido**: modelo da seção 6.1; falta a versão do Codex | — |
 | Blocos sem escopo próprio (D-014) | ainda; limita o Excelente | linguagem, se sobrar tempo |
 | Poucos comentários; busca linear na tabela de símbolos | ainda | cada frente comenta o que tocar |
 | 100.000 `+`, registro recursivo, `make test`, E/S, binários em `build/` | corrigidos antes | — |

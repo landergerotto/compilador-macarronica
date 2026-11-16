@@ -384,6 +384,11 @@ static LlvmValue emit_binary(Codegen *gen, const AstNode *node)
         return result;
     }
     right = emit_expression(gen, node->as.binary_expr.right);
+    if (node->semantic.conversion_type_id != AST_ID_NONE) {
+        /* Expressao mista: so as conversoes anotadas pela semantica (D-012). */
+        left = convert_value(gen, left, node->semantic.conversion_type_id, node);
+        right = convert_value(gen, right, node->semantic.conversion_type_id, node);
+    }
     result = new_temporary(gen, node->semantic.type_id);
     int real = left.type_id == TYPE_ID_FLOAT || left.type_id == TYPE_ID_DOUBLE;
     const char *instruction = NULL;
@@ -449,6 +454,8 @@ static LlvmValue emit_unary(Codegen *gen, const AstNode *node)
     LlvmValue value;
     LlvmValue result;
     value = emit_expression(gen, operand);
+    if (node->semantic.conversion_type_id != AST_ID_NONE)
+        value = convert_value(gen, value, node->semantic.conversion_type_id, node);
     if (op == AST_OP_UNARY_PLUS) return value;
     result = new_temporary(gen, node->semantic.type_id);
     if (op == AST_OP_LOGICAL_NOT) {

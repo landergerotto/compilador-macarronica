@@ -697,6 +697,9 @@ static size_t analyze_binary(SemanticAnalyzer *analyzer, AstNode *node)
 {
     size_t left = analyze_expression(analyzer, node->as.binary_expr.left, 0);
     size_t right = analyze_expression(analyzer, node->as.binary_expr.right, 0);
+    /* Expressao mista (D-012): a conta e feita no tipo numerico mais largo. */
+    size_t common = type_numeric_common(left, right);
+    size_t operand_type = common;
     size_t result_type = TYPE_ID_ERROR;
     int valid = 0;
     if (left == TYPE_ID_ERROR || right == TYPE_ID_ERROR)
@@ -706,31 +709,40 @@ static size_t analyze_binary(SemanticAnalyzer *analyzer, AstNode *node)
     case AST_OP_SUBTRACT:
     case AST_OP_MULTIPLY:
     case AST_OP_POWER:
-        valid = left == right && type_is_numeric(&analyzer->result->types, left);
-        result_type = left;
+        valid = common != TYPE_ID_ERROR;
+        result_type = common;
         break;
     case AST_OP_DIVIDE:
-        valid = left == right && (left == TYPE_ID_FLOAT || left == TYPE_ID_DOUBLE);
-        result_type = left;
+        /* "/" e sempre divisao real: inteira / inteira e feita em duplocarpado. */
+        valid = common != TYPE_ID_ERROR;
+        if (common == TYPE_ID_INTEGER) operand_type = TYPE_ID_DOUBLE;
+        result_type = operand_type;
         break;
     case AST_OP_INTEGER_DIVIDE:
+        /* "//" so existe para inteira; com real o programa usa "/". */
         valid = left == TYPE_ID_INTEGER && right == TYPE_ID_INTEGER;
         result_type = TYPE_ID_INTEGER;
         break;
     case AST_OP_LESS:
     case AST_OP_GREATER:
-        valid = left == right && type_is_numeric(&analyzer->result->types, left);
+        valid = common != TYPE_ID_ERROR;
         result_type = TYPE_ID_BOOL;
         break;
     case AST_OP_EQUAL:
     case AST_OP_DIFFERENT:
-        valid = left == right && type_is_scalar(&analyzer->result->types, left);
+        if (common == TYPE_ID_ERROR) {
+            valid = left == right && type_is_scalar(&analyzer->result->types, left);
+            operand_type = left;
+        } else {
+            valid = 1;
+        }
         result_type = TYPE_ID_BOOL;
         break;
     case AST_OP_LOGICAL_AND:
     case AST_OP_LOGICAL_XOR:
     case AST_OP_LOGICAL_OR:
         valid = left == TYPE_ID_BOOL && right == TYPE_ID_BOOL;
+        operand_type = TYPE_ID_BOOL;
         result_type = TYPE_ID_BOOL;
         break;
     default:
@@ -744,6 +756,8 @@ static size_t analyze_binary(SemanticAnalyzer *analyzer, AstNode *node)
                (node->as.binary_expr.right->semantic.flags & AST_SEMANTIC_CONSTANT) != 0U)
                   ? AST_SEMANTIC_CONSTANT
                   : 0U));
+    if (left != operand_type || right != operand_type)
+        node->semantic.conversion_type_id = operand_type;
     return result_type;
 }
 
@@ -766,7 +780,9 @@ static size_t analyze_unary(SemanticAnalyzer *analyzer, AstNode *node)
         valid = type_is_numeric(&analyzer->result->types, operand);
         break;
     case AST_OP_ROOT:
-        valid = operand == TYPE_ID_FLOAT || operand == TYPE_ID_DOUBLE;
+        /* raiz de inteira e calculada em duplocarpado, como inteira / inteira. */
+        valid = type_is_numeric(&analyzer->result->types, operand);
+        if (operand == TYPE_ID_INTEGER) result_type = TYPE_ID_DOUBLE;
         break;
     case AST_OP_LOGICAL_NOT:
         valid = operand == TYPE_ID_BOOL;
@@ -788,6 +804,8 @@ static size_t analyze_unary(SemanticAnalyzer *analyzer, AstNode *node)
              ((node->as.unary_expr.operand->semantic.flags & AST_SEMANTIC_CONSTANT) != 0U
                   ? AST_SEMANTIC_CONSTANT
                   : 0U));
+    if (node->as.unary_expr.operator_kind == AST_OP_ROOT && result_type != operand)
+        node->semantic.conversion_type_id = result_type;
     return result_type;
 }
 

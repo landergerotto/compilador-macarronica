@@ -5,6 +5,17 @@ As escolhas que preenchem lacunas são decisões da Macaronica deste projeto.
 O código C99 gera LLVM IR textual diretamente da AST semanticamente aceita.
 Não existe uma representação intermediária própria de três endereços.
 
+## Lacunas da Seção 4.3 (resumo)
+
+| Pergunta do enunciado | Decisão | Detalhe |
+|---|---|---|
+| Promoção entre `inteira`, `flut` e `duplocarpado`; `/` e `//` em cada combinação | Só alarga, na ordem `inteira < flut < duplocarpado`: em atribuição, argumento, retorno e expressão mista. `/` é sempre real (`inteira / inteira` é feita em `duplocarpado`); `//` só aceita `inteira`. Nunca estreita, então não há `fptrunc` | Expressões mistas; D-011 e D-012 |
+| `E` e `OU` usam curto-circuito? Como sai o `XOR`? | Sim, com blocos e `phi`. `XOR` avalia os dois lados e vira `xor i1` | Operações e controle |
+| O que é `respost` em `principal`? | Código de saída do processo, reduzido a 32 bits; `vazio principal` sai com 0 | Entrada e retorno |
+| Divisão por zero, overflow inteiro, vetor fora dos limites | Divisão e índice são verificados antes da operação e abortam com status de falha e `linha N: erro de execucao C` na saída de erro (na placa, mensagem na serial e LED piscando). `+`, `-`, `*` e `^` em `inteira` são módulo 2^64, sem comportamento indefinido | Validação e execução |
+| Formato de impressão | `inteira` em decimal; `flut` com `%.9g`; `duplocarpado` com `%.17g`; `bool` como `VER`/`FAL`; só `imprimeNl` quebra a linha | Validação e execução |
+| Largura dos tipos e `duplocarpado` sem `double` de 64 bits | `inteira` é i64 e `duplocarpado` é binary64 em qualquer alvo. Na ESP32, cuja FPU só faz 32 bits, o `double` roda em software (libgcc) e nunca vira `float`. Não há alvo AVR; num alvo sem `double` de 64 bits, a regra seria recusar `duplocarpado` no alvo, como já se recusa pino inválido (E-TGT-001) e falta de RAM (E-TGT-002) | Tipos e portabilidade; Rota C para ESP32 |
+
 ## Tipos e portabilidade
 
 | Macaronica | LLVM | Contrato |
@@ -28,7 +39,7 @@ O bitcode obtido ao compilar o runtime C pode conter triple e datalayout do
 hospedeiro. Essa especialização ocorre somente ao ligar/executar o programa;
 o `.ll` original permanece independente da plataforma. O PjBL 4 deve preservar
 o significado de `double`, mesmo quando uma placa exigir implementação em
-software. Nenhuma placa, ISA ou ABI de placa é escolhida nesta etapa.
+software. A placa do PjBL 4 (ESP32, Xtensa LX6) está em "Rota C para ESP32".
 
 ## Nomes na IR
 
@@ -65,10 +76,53 @@ ponteiro. Registros têm cópia, argumento e retorno por valor, com tipos
 nominais e sem ciclos por valor; vetores completos não são valores de fonte.
 
 As únicas promoções são `inteira -> flut`, `inteira -> duplocarpado` e
-`flut -> duplocarpado`, em atribuições, argumentos e retornos. O codegen emite
-`sitofp i64 ... to float`, `sitofp i64 ... to double` e `fpext float ... to
-double`, respectivamente. A conversão para double a partir de inteira é
-direta. Não há narrowing, cast de fonte nem promoção de operandos binários.
+`flut -> duplocarpado`, em atribuições, argumentos, retornos e nos operandos
+de expressões mistas. O codegen emite `sitofp i64 ... to float`,
+`sitofp i64 ... to double` e `fpext float ... to double`, respectivamente
+(no C99, `(float)` e `(double)`). A conversão para double a partir de inteira
+é direta. Não há estreitamento nem cast de fonte, então `fptrunc` e `fptosi`
+nunca aparecem.
+
+### Expressões mistas (D-011, D-012)
+
+Num operador binário, o tipo comum é o mais largo dos dois operandos na ordem
+`inteira < flut < duplocarpado`. A semântica grava esse tipo no nó do operador
+(`semantic.conversion_type_id`, que o dump da AST mostra como `converte=N`) só
+quando algum operando precisa mudar de tipo. Os dois back-ends convertem
+exatamente o que foi anotado e não decidem tipos por conta própria.
+
+| Operação | Operandos | Conta feita em | Resultado |
+|---|---|---|---|
+| `+`, `-`, `*` | dois numéricos | tipo comum | tipo comum |
+| `^` | dois numéricos | tipo comum | tipo comum (`inteira ^ inteira` é `inteira`) |
+| `/` | dois numéricos | tipo comum; `duplocarpado` se os dois forem `inteira` | real |
+| `//` | dois `inteira` | `inteira` (`sdiv i64`) | `inteira` |
+| `//` | algum real | erro semântico E-SEM-017 | — |
+| `raiz(x)` | `flut` ou `duplocarpado` | o próprio tipo | o próprio tipo |
+| `raiz(x)` | `inteira` | `duplocarpado` | `duplocarpado` |
+| `<`, `>`, `==`, `!` | dois numéricos | tipo comum | `bool` |
+
+Exemplos: `f + 1` emite `sitofp i64 1 to float` e soma em `float`; `2.0 ^ 2`
+chama `zl_potencia_flut(2.0, 2.0)` e dá o `flut` 4; `7 / 2` converte os dois
+lados para `double` e dá 3.5; `7 // 2` dá 3; `flut m; m receba 7 / 2;` é
+recusado com E-SEM-020, porque `duplocarpado` não estreita para `flut`.
+
+Justificativas:
+- `/` é sempre divisão real porque a linguagem já tem `//` para a divisão
+  inteira, o mesmo par de Python 3. Entre dois `inteira`, o real escolhido é
+  `duplocarpado`: ele representa exatamente todo inteiro até 2^53, enquanto
+  `flut` erra a partir de 2^24 (em `02_conversoes`, 16777217 vira 16777216).
+- `//` com real seria uma segunda divisão real, com a dúvida entre truncar e
+  arredondar para baixo. Para reais o programa usa `/`.
+- `inteira ^ inteira` continua `inteira` para ser exato: exponenciação por
+  quadrados no runtime, módulo 2^64. `pow` em `double` perderia precisão acima
+  de 2^53, e `llvm.powi` só serve para base real com expoente `i32`.
+- `raiz` de `inteira` segue a regra do `/` e dá `duplocarpado`.
+
+Testes: `tests/execucao/13_expressoes_mistas`, `14_potencia_raiz` e
+`15_divisao_real_inteira`; recusas em
+`tests/semantic/invalido_operadores_mistos.mac` (`7.0 // 2`) e
+`invalido_divisao_real_para_inteira.mac` (`inteira` recebendo `7 / 2`).
 
 ## Operações e controle
 
@@ -77,8 +131,8 @@ Operandos, argumentos e o destino de atribuição são avaliados conforme D-020.
 e usa `xor i1`. Condicionais e laços formam um CFG com um terminador por bloco.
 Depois, `mem2reg` pode promover os locais elegíveis para SSA e inserir `phi`.
 
-`/` aceita somente dois `flut` ou dois `duplocarpado`, e emite `fdiv` após
-guarda para divisor zero, inclusive zero negativo. `//` emite `sdiv i64`,
+`/` converte os operandos para o tipo real da conta (tabela acima) e emite
+`fdiv` após guarda para divisor zero, inclusive zero negativo. `//` emite `sdiv i64`,
 truncando em direção a zero, após guardas contra zero e `INT64_MIN / -1`.
 Soma, subtração, multiplicação, menos unário e potência inteira são modulares
 em 64 bits; a IR não usa `nsw`/`nuw`. Potência inteira usa exponenciação por
@@ -88,7 +142,7 @@ Potências reais usam `powf`/`pow`; raízes usam `sqrtf`/`sqrt` via runtime.
 Raiz negativa e domínio inválido de potência são erros. Outros resultados
 reais seguem IEEE 754, incluindo arredondamento, infinito e NaN; não é usado
 `fast-math`. Comparações reais `<`, `>`, `==` são ordenadas; `!` é verdadeira
-também quando houver NaN. O frontend já exige operandos de tipos iguais.
+também quando houver NaN. Numa comparação mista, os dois lados já chegam convertidos para o tipo comum.
 
 ## ABI do runtime
 
@@ -136,6 +190,7 @@ termina com `unreachable`.
 | 5 | expoente inteiro negativo |
 | 6 | entrada inválida, ausente ou fora da faixa |
 | 7 | domínio inválido de potência real |
+| 8 | uso inválido de pino ou de `espera` (só na rota da placa, `ZL_ERRO_PLACA`) |
 
 O diagnóstico usa `linha N: erro de execucao C: mensagem` em `stderr` e status
 de falha. O gerador faz as guardas de divisão e índice antes da operação.

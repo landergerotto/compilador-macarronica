@@ -1,4 +1,4 @@
 inteira principal() @
 [
-    respost 1 + 2.0;
+    respost 7.0 // 2;
 ]

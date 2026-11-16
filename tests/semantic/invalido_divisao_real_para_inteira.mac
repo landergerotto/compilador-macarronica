@@ -1,0 +1,6 @@
+inteira principal() @
+[
+    inteira metade;
+    metade receba 7 / 2;
+    respost metade;
+]

@@ -402,6 +402,12 @@ static CValue c_binary(CCodegen *gen, const AstNode *node)
         return result;
     }
     right = c_expression(gen, node->as.binary_expr.right);
+    if (node->semantic.conversion_type_id != AST_ID_NONE) {
+        /* Expressao mista: so as conversoes anotadas pela semantica (D-012). */
+        left = c_convert(gen, left, node->semantic.conversion_type_id, node);
+        right = c_convert(gen, right, node->semantic.conversion_type_id, node);
+        integer = left.type_id == TYPE_ID_INTEGER;
+    }
     if (op == AST_OP_DIVIDE || op == AST_OP_INTEGER_DIVIDE) {
         c_write(gen, "  if (%s == 0) zl_erro_execucao(ZL_ERRO_DIVISAO_ZERO, %zu);\n",
                 right.name, node->span.start.line);
@@ -455,6 +461,8 @@ static CValue c_unary(CCodegen *gen, const AstNode *node)
     CValue result = c_new_value(gen, node->semantic.type_id);
     CValue value;
     value = c_expression(gen, operand);
+    if (node->semantic.conversion_type_id != AST_ID_NONE)
+        value = c_convert(gen, value, node->semantic.conversion_type_id, node);
     if (op == AST_OP_UNARY_PLUS) return value;
     c_declare_value(gen, result);
     c_write(gen, " = ");

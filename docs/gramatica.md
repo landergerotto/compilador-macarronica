@@ -255,21 +255,21 @@ Essa precedência define a forma da AST. A execução segue D-020: operandos e a
 
 | Construção | Tipos aceitos | Resultado |
 |---|---|---|
-| `+`, `-`, `*` binários | operandos idênticos em `inteira`, `flut` ou `duplocarpado` | tipo dos operandos |
-| `/` | operandos idênticos em `flut` ou `duplocarpado` | tipo dos operandos |
+| `+`, `-`, `*` binários | dois numéricos (`inteira`, `flut`, `duplocarpado`) | tipo comum |
+| `/` | dois numéricos | tipo comum; `duplocarpado` se os dois forem `inteira` |
 | `//` | `inteira`, `inteira` | `inteira` |
-| `^` | operandos idênticos e numéricos | tipo dos operandos |
+| `^` | dois numéricos | tipo comum |
 | `+`, `-` unários | um numérico | tipo do operando |
-| `raiz` | `flut` ou `duplocarpado` | tipo do operando |
-| `<`, `>` | operandos idênticos e numéricos | `bool` |
-| `==`, `!` | operandos escalares idênticos | `bool` |
+| `raiz` | um numérico | tipo do operando; `duplocarpado` se for `inteira` |
+| `<`, `>` | dois numéricos | `bool` |
+| `==`, `!` | dois numéricos, ou escalares idênticos | `bool` |
 | `NÃO` | `bool` | `bool` |
 | `E`, `OU`, `XOR` | `bool`, `bool` | `bool` |
 | `nome{indice}` | `nome` é vetor; índice `inteira` | tipo do elemento |
 | `expr.campo` | base é registro e campo existe | tipo declarado do campo |
 | `nome(args)` | argumentos compativeis com a assinatura conforme D-012 | retorno declarado |
 
-Atribuicao, argumento e retorno aceitam tipos identicos ou promocao `inteira -> flut`, `inteira -> duplocarpado` e `flut -> duplocarpado`. Conversoes inversas e casts explicitos nao sao aceitos. Operadores mantem as regras da tabela, sem promocao de operandos. Nao ha concatenacao de `palavra`. `vazio` nao e tipo de valor.
+Atribuicao, argumento e retorno aceitam tipos identicos ou promocao `inteira -> flut`, `inteira -> duplocarpado` e `flut -> duplocarpado`. Conversoes inversas e casts explicitos nao sao aceitos. Tipo comum e o mais largo dos dois operandos na ordem `inteira < flut < duplocarpado`; o operando de menor ordem e convertido antes da conta (D-011, D-012). Nao ha concatenacao de `palavra`. `vazio` nao e tipo de valor.
 
 Um identificador que nomeia um vetor não é, isoladamente, `lvalue` nem `rvalue`. O vetor completo não pode ser lido, copiado, atribuído, passado como argumento ou retornado. Somente `nome{indice}` denota um elemento com o tipo declarado do vetor e pode funcionar como destino ou valor.
 

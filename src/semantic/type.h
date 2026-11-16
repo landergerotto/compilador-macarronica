@@ -83,10 +83,18 @@ int type_is_scalar(const TypeTable *table, size_t type_id);
 
 /*
  * Aceita tipos iguais e inteira -> flut/duplocarpado, flut -> duplocarpado.
- * Usado em atribuicoes, argumentos e retornos; nao promove operadores.
+ * Usado em atribuicoes, argumentos e retornos; operadores usam
+ * type_numeric_common.
  * TYPE_ID_ERROR passa de proposito, porque o erro
  * verdadeiro ja foi mostrado antes e nao queremos criar mensagens em cascata.
  */
 int type_is_assignable(size_t target_type_id, size_t value_type_id);
+
+/*
+ * Tipo comum de uma expressao mista (D-012): o mais largo dos dois tipos
+ * numericos, na ordem inteira < flut < duplocarpado. Devolve TYPE_ID_ERROR
+ * se algum dos dois nao for numerico.
+ */
+size_t type_numeric_common(size_t left_type_id, size_t right_type_id);
 
 #endif
