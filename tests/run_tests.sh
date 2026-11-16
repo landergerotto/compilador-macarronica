@@ -310,6 +310,30 @@ else
     record_failure 'CLI arquivo ausente' "esperava codigo 3, recebeu $status"
 fi
 
+# Regressao: no Windows o tmpfile() do msvcrt criava o temporario na raiz do
+# drive do diretorio atual (C:\ sem permissao de escrita) e a compilacao
+# falhava fora do D:. Compila a partir de / e confere que nada sobra ao lado.
+(cd / && run_compiler "$project_root/tests/professor/nivel1_soma.mcn" \
+    -o "$temporary_dir/outro-cwd.ll") >"$temporary_dir/outro-cwd.txt" 2>"$temporary_dir/outro-cwd.err"
+status=$?
+if [ "$status" -eq 0 ] && [ -s "$temporary_dir/outro-cwd.ll" ] && [ ! -e "$temporary_dir/outro-cwd.ll.tmp" ]; then
+    record_pass 'CLI compila a partir de outro diretorio'
+else
+    record_failure 'CLI compila a partir de outro diretorio' "codigo $status: $(head -n 1 "$temporary_dir/outro-cwd.err")"
+fi
+
+# Erro de fonte nao pode destruir uma saida que ja existia nem deixar .tmp.
+printf 'saida anterior\n' >"$temporary_dir/preserva.ll"
+run_compiler "$project_root/tests/invalidos/lexico_igual_isolado.mac" -o "$temporary_dir/preserva.ll" \
+    >"$temporary_dir/preserva.txt" 2>"$temporary_dir/preserva.err"
+status=$?
+if [ "$status" -eq 1 ] && [ "$(cat "$temporary_dir/preserva.ll")" = 'saida anterior' ] \
+    && [ ! -e "$temporary_dir/preserva.ll.tmp" ]; then
+    record_pass 'CLI erro de fonte preserva saida existente'
+else
+    record_failure 'CLI erro de fonte preserva saida existente' "codigo $status"
+fi
+
 if [ "$test_scope" != frontend ]; then
     llvm_bindir=${LLVM_BINDIR:-}
     if [ -n "$llvm_bindir" ]; then
