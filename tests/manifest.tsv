@@ -1,19 +1,34 @@
-arquivo	esperado	fase	categoria
-validos/01_variaveis_tipos.mac	aceito	-	declaracoes e tipos nativos
-validos/02_vetor_repete.mac	aceito	-	vetor, acesso e repete
-validos/03_registro.mac	aceito	-	declaracao e uso de tipo registro
-validos/04_funcao_condicional.mac	aceito	-	funcao, principal, chamada, retorno, cond e casocontrario
-validos/05_durante.mac	aceito	-	durante e atribuicao
-validos/06_expressoes.mac	aceito	-	precedencia e operadores aritmeticos, relacionais e logicos
-invalidos/lexico_simbolo_invalido.mac	rejeitado	lexica	caractere sublinhado fora do alfabeto
-invalidos/lexico_igual_isolado.mac	rejeitado	lexica	igual isolado
-invalidos/lexico_texto_nao_terminado.mac	rejeitado	lexica	literal de palavra sem fechamento
-invalidos/sintatico_estrutura_malformada.mac	rejeitado	sintatica	cond sem parenteses
-invalidos/sintatico_ponto_virgula_ausente.mac	rejeitado	sintatica	ponto e virgula ausente
-invalidos/sintatico_delimitador_ausente.mac	rejeitado	sintatica	parentese de fechamento ausente
-invalidos/semantico_nao_declarado.mac	rejeitado	semantica	uso de nome nao declarado
-invalidos/semantico_tipo_incompativel.mac	rejeitado	semantica	atribuicao flut para inteira
-invalidos/semantico_assinatura_incorreta.mac	rejeitado	semantica	quantidade de argumentos incorreta
-invalidos/semantico_retorno_incorreto.mac	rejeitado	semantica	retorno bool em funcao inteira
-invalidos/semantico_indice_vetor_invalido.mac	rejeitado	semantica	indice constante fora dos limites
-invalidos/semantico_redefinicao.mac	rejeitado	semantica	valor duplicado no mesmo escopo
+arquivo	esperado	fase	erros	categoria
+validos/01_variaveis_tipos.mac	aceito	-	0	declaracoes e tipos nativos
+validos/02_vetor_repete.mac	aceito	-	0	vetor, acesso e repete
+validos/03_registro.mac	aceito	-	0	declaracao e uso de tipo registro
+validos/04_funcao_condicional.mac	aceito	-	0	funcao, principal, chamada, retorno, cond e casocontrario
+validos/05_durante.mac	aceito	-	0	durante e atribuicao
+validos/06_expressoes.mac	aceito	-	0	precedencia e operadores aritmeticos, relacionais e logicos
+invalidos/lexico_simbolo_invalido.mac	rejeitado	lexica	1	caractere sublinhado fora do alfabeto
+invalidos/lexico_igual_isolado.mac	rejeitado	lexica	1	igual isolado
+invalidos/lexico_texto_nao_terminado.mac	rejeitado	lexica	1	literal de palavra sem fechamento
+invalidos/sintatico_estrutura_malformada.mac	rejeitado	sintatica	1	cond sem parenteses
+invalidos/sintatico_ponto_virgula_ausente.mac	rejeitado	sintatica	1	ponto e virgula ausente
+invalidos/sintatico_delimitador_ausente.mac	rejeitado	sintatica	1	parentese de fechamento ausente
+invalidos/semantico_nao_declarado.mac	rejeitado	semantica	1	uso de nome nao declarado
+invalidos/semantico_tipo_incompativel.mac	rejeitado	semantica	1	atribuicao flut para inteira
+invalidos/semantico_assinatura_incorreta.mac	rejeitado	semantica	1	quantidade de argumentos incorreta
+invalidos/semantico_retorno_incorreto.mac	rejeitado	semantica	1	retorno bool em funcao inteira
+invalidos/semantico_indice_vetor_invalido.mac	rejeitado	semantica	1	indice constante fora dos limites
+invalidos/semantico_redefinicao.mac	rejeitado	semantica	1	valor duplicado no mesmo escopo
+invalidos/sintatico_declaracao_virgula_sem_nome.mac	rejeitado	sintatica	1	virgula sem nome em declaracao (travava o parser)
+invalidos/sintatico_declaracao_virgula_literal.mac	rejeitado	sintatica	1	literal no lugar de nome em declaracao (travava o parser)
+invalidos/sintatico_declaracao_vetor_misturado.mac	rejeitado	sintatica	1	vet depois de virgula em declaracao (travava o parser)
+validos/07_nao_como_nome.mac	aceito	-	0	nao e Nao continuam nomes validos; so NAO e grafia errada de NÃO
+invalidos/lexico_nao_sem_til.mac	rejeitado	lexica	1	NAO sem til: um erro E-LEX-007, sem cascata no parser
+invalidos/lexico_nao_minusculo.mac	rejeitado	lexica	1	não minusculo: um erro E-LEX-007
+invalidos/sintatico_vetor_tamanho_variavel.mac	rejeitado	sintatica	1	vet{n}: tamanho nao literal (gerava 5 erros)
+invalidos/sintatico_vetor_tamanho_expressao.mac	rejeitado	sintatica	1	vet{2 + 1}: tamanho deve ser um unico literal
+invalidos/sintatico_atribuicao_dois_valores.mac	rejeitado	sintatica	1	b receba 2 2: um erro (gerava 2)
+invalidos/sintatico_repete_ponto_virgula.mac	rejeitado	sintatica	1	';' no cabecalho do repete em vez de ','
+invalidos/sintatico_cond_com_atribuicao.mac	rejeitado	sintatica	1	atribuicao na condicao com casocontrario depois
+invalidos/sintatico_durante_parentese_ausente.mac	rejeitado	sintatica	1	')' ausente na condicao do durante
+invalidos/sintatico_bloco_sem_fechamento.mac	rejeitado	sintatica	1	']' ausente antes da proxima funcao
+invalidos/sintatico_func_reservada.mac	rejeitado	sintatica	1	func em vez de outrafuncao: erro so no func
+invalidos/sintatico_dois_erros_reais.mac	rejeitado	sintatica	2	dois erros reais em comandos distintos: dois diagnosticos

@@ -1,0 +1,10 @@
+vazio principal() @
+[
+    inteira a;
+    a receba 1;
+    cond (NAO (a == 1)) edai
+    [
+        a receba 2;
+    ]
+    respost;
+]

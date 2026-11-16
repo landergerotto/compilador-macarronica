@@ -108,11 +108,16 @@ else
     sed 's/^/       /' "$temporary_dir/rounding-build.err" >&2
 fi
 
+# run_source_case CAMINHO aceito|rejeitado FASE [ERROS]
+# ERROS e a quantidade exata de diagnosticos de erro esperada (padrao 1 para
+# rejeitado). Conferir a quantidade, e nao so a existencia, e o que pega
+# erros em cascata: um erro real deve gerar um diagnostico (D-018).
 run_source_case()
 {
     relative_path=$1
     expectation=$2
     expected_phase=$3
+    expected_errors=${4:-1}
     source_path="$test_root/$relative_path"
     stdout_file="$temporary_dir/stdout.txt"
     stderr_file="$temporary_dir/stderr.txt"
@@ -152,13 +157,21 @@ run_source_case()
         sed 's/^/       /' "$stderr_file" >&2
         return
     fi
+    error_count=$(grep -Ec ': (lexico|sintatico|semantico) E-' "$stderr_file")
+    if [ "$error_count" -ne "$expected_errors" ]; then
+        record_failure "$relative_path" \
+            "esperava $expected_errors diagnostico(s) de erro, recebeu $error_count"
+        sed 's/^/       /' "$stderr_file" >&2
+        return
+    fi
     record_pass "$relative_path"
 }
 
-while IFS="$(printf '\t')" read -r relative_path expectation phase category; do
+# Colunas do manifesto: arquivo, esperado, fase, erros, categoria.
+while IFS="$(printf '\t')" read -r relative_path expectation phase errors category; do
     [ "$relative_path" = arquivo ] && continue
     [ -z "$relative_path" ] && continue
-    run_source_case "$relative_path" "$expectation" "$phase"
+    run_source_case "$relative_path" "$expectation" "$phase" "$errors"
 done < "$test_root/manifest.tsv"
 
 run_source_case 'integration/valido_minimo.mac' aceito '-'

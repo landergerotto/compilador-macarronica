@@ -1,0 +1,13 @@
+vazio principal() @
+[
+    inteira a;
+    cond (a receba 1) edai
+    [
+        a receba 2;
+    ]
+    casocontrario edai
+    [
+        a receba 3;
+    ]
+    respost;
+]

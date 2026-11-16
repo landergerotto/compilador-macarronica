@@ -1,0 +1,10 @@
+vazio principal() @
+[
+    inteira nao;
+    inteira Nao;
+    bool b;
+    nao receba 1;
+    Nao receba nao + 1;
+    b receba NÃO (Nao == 2);
+    respost;
+]
