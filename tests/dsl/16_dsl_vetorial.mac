@@ -1,0 +1,56 @@
+inteira vet{4} a;
+
+inteira principal() @
+[
+    inteira i;
+    inteira vet{4} b;
+    inteira vet{4} c;
+    flut vet{3} x;
+    flut vet{3} y;
+    duplocarpado vet{3} d;
+    repete (i receba 0, i < 4, i receba i + 1) edai
+    [
+        a{i} receba i + 1;
+        b{i} receba 10 * (i + 1);
+    ]
+    c receba a + b;
+    imprimeInteira(c{0});
+    imprimeNl();
+    imprimeInteira(c{3});
+    imprimeNl();
+    c receba b - a;
+    imprimeInteira(c{2});
+    imprimeNl();
+    c receba a * b;
+    imprimeInteira(c{3});
+    imprimeNl();
+    c receba 2 * a;
+    imprimeInteira(c{1});
+    imprimeNl();
+    c receba a - 1;
+    imprimeInteira(c{0});
+    imprimeNl();
+    imprimeInteira(somavet(a));
+    imprimeNl();
+    imprimeInteira(maxvet(b));
+    imprimeNl();
+    imprimeInteira(prodesc(a, b));
+    imprimeNl();
+    c receba somavet(a) * b;
+    imprimeInteira(c{1});
+    imprimeNl();
+    repete (i receba 0, i < 3, i receba i + 1) edai
+    [
+        x{i} receba i + 1;
+        y{i} receba 2;
+    ]
+    x receba x * y;
+    imprimeFlut(x{2});
+    imprimeNl();
+    imprimeFlut(prodesc(x, y));
+    imprimeNl();
+    d receba x + 0.25;
+    imprimeDuplocarpado(d{0});
+    imprimeNl();
+    respost 0;
+]

@@ -1,4 +1,5 @@
 #include "codegen_c.h"
+#include "codegen_mlir.h" /* Frente dsl-mlir: nucleos da DSL vetorial. */
 
 #include <stdarg.h>
 #include <stdint.h>
@@ -484,9 +485,55 @@ static CValue c_unary(CCodegen *gen, const AstNode *node)
     return result;
 }
 
+/* Frente dsl-mlir: a operacao vetorial chama o nucleo C de mesmo nome que o
+ * nucleo MLIR (docs/dsl.md, 6.3), com o tamanho N no ultimo argumento. */
+static CValue c_dsl_operation(CCodegen *gen, const AstNode *node)
+{
+    DslOperation operation;
+    DslArgument arguments[3];
+    CValue result;
+    CValue scalar;
+    size_t count, i;
+    result.type_id = node->semantic.type_id;
+    result.name[0] = '\0';
+    scalar = result;
+    if (!dsl_describe(gen->semantic, node, &operation)) {
+        c_fail(gen, node, "operacao vetorial sem descricao da DSL");
+        return result;
+    }
+    if (operation.scalar != NULL)
+        scalar = c_convert(gen, c_expression(gen, operation.scalar),
+                           operation.result_type_id, node);
+    count = dsl_kernel_arguments(&operation, arguments);
+    if (operation.target_id == SYMBOL_ID_NONE) {
+        result = c_new_value(gen, operation.result_type_id);
+        c_declare_value(gen, result);
+        c_write(gen, " = %s(", operation.kernel);
+    } else c_write(gen, "  %s(", operation.kernel);
+    for (i = 0U; i < count; ++i) {
+        const Symbol *vector;
+        if (i != 0U) c_write(gen, ", ");
+        if (arguments[i].is_scalar) {
+            c_write(gen, "%s", scalar.name);
+            continue;
+        }
+        vector = c_symbol(gen, arguments[i].symbol_id);
+        if (vector == NULL) {
+            c_fail(gen, node, "vetor da DSL sem simbolo C");
+            return result;
+        }
+        c_variable_name(gen, vector);
+    }
+    c_write(gen, ", INT64_C(%lld));\n", operation.length);
+    return result;
+}
+
 static CValue c_expression(CCodegen *gen, const AstNode *node)
 {
-    CValue result = c_new_value(gen, node->semantic.type_id);
+    CValue result;
+    if (node->kind == AST_CALL_EXPR && dsl_is_operation(node)) /* Frente dsl-mlir */
+        return c_dsl_operation(gen, node);
+    result = c_new_value(gen, node->semantic.type_id);
     if (gen->status != FRONTEND_STATUS_OK) return result;
     switch (node->kind) {
     case AST_LITERAL_EXPR: c_literal(gen, node, result); break;
@@ -540,6 +587,10 @@ static void c_statement(CCodegen *gen, const AstNode *node)
     size_t i;
     if (node == NULL || gen->status != FRONTEND_STATUS_OK) return;
     c_write(gen, "  /* linha %zu */\n", node->span.start.line);
+    if (node->kind == AST_ASSIGNMENT && dsl_is_operation(node)) { /* Frente dsl-mlir */
+        (void)c_dsl_operation(gen, node);
+        return;
+    }
     switch (node->kind) {
     case AST_BLOCK:
         for (i = 0U; i < node->as.block.statements.count; ++i)
@@ -708,6 +759,10 @@ FrontendStatus codegen_c_emit(const SourceFile *source, const AstNode *program,
                   "static inline int32_t mac_arg_i32(int64_t value)\n{\n"
                   "  return value > INT32_MAX ? INT32_MAX :\n"
                   "      value < INT32_MIN ? INT32_MIN : (int32_t)value;\n}\n\n");
+    /* Frente dsl-mlir: nucleos da DSL, depois do mac_i64 que eles usam. */
+    if (gen.status == FRONTEND_STATUS_OK &&
+        !codegen_mlir_write_c_kernels(output, program, semantic))
+        c_fail(&gen, program, "falha ao escrever os nucleos da DSL");
     c_records(&gen);
     for (i = 0U; i < semantic->symbols.count; ++i) {
         const Symbol *symbol = &semantic->symbols.items[i];

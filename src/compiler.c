@@ -9,6 +9,7 @@
 #include "semantic/semantic.h"
 #include "ir/codegen_llvm.h"
 #include "codegen_c.h"
+#include "codegen_mlir.h" /* Frente dsl-mlir */
 #include "target.h"
 
 #include <errno.h>
@@ -183,6 +184,10 @@ CompilerExitCode compiler_compile_file(const char *path,
     if (options->output_path != NULL) {
         exit_code = write_generated_output(&source, program, &semantic, &diagnostics,
                                            options->output_path, options->emit_c);
+        if (exit_code != COMPILER_EXIT_SUCCESS) goto diagnostics_and_cleanup;
+        /* Frente dsl-mlir: se o programa usa a DSL, os nucleos vao para <saida>.mlir. */
+        if (!options->emit_c)
+            exit_code = codegen_mlir_write_companion(program, &semantic, options->output_path);
         if (exit_code != COMPILER_EXIT_SUCCESS) goto diagnostics_and_cleanup;
     }
     exit_code = COMPILER_EXIT_SUCCESS;

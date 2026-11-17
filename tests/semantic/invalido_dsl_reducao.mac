@@ -1,0 +1,6 @@
+inteira principal() @
+[
+    inteira x;
+    x receba 3;
+    respost somavet(x);
+]

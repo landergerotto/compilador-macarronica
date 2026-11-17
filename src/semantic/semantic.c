@@ -1,4 +1,5 @@
 #include "semantic.h"
+#include "dsl.h" /* Frente dsl-mlir */
 
 #include <float.h>
 #include <limits.h>
@@ -809,6 +810,25 @@ static size_t analyze_unary(SemanticAnalyzer *analyzer, AstNode *node)
     return result_type;
 }
 
+/* Frente dsl-mlir: a regra da DSL mora em dsl.c; aqui so o contexto. */
+static size_t dsl_analyze_scalar(void *analyzer, AstNode *node)
+{
+    return analyze_expression((SemanticAnalyzer *)analyzer, node, 0);
+}
+
+static DslContext dsl_context(SemanticAnalyzer *analyzer)
+{
+    DslContext context;
+    context.source = analyzer->source;
+    context.diagnostics = analyzer->diagnostics;
+    context.result = analyzer->result;
+    context.scope_id = analyzer->current_scope_id;
+    context.allocation_failed = &analyzer->allocation_failed;
+    context.analyzer = analyzer;
+    context.analyze_expression = dsl_analyze_scalar;
+    return context;
+}
+
 static size_t analyze_expression(SemanticAnalyzer *analyzer, AstNode *node,
                                  int allow_void_call)
 {
@@ -845,6 +865,10 @@ static size_t analyze_expression(SemanticAnalyzer *analyzer, AstNode *node,
                  (type_id == TYPE_ID_ERROR ? AST_SEMANTIC_ERROR : 0U));
         return type_id;
     case AST_CALL_EXPR:
+        if (dsl_is_reduction_call(analyzer->result, node)) { /* Frente dsl-mlir */
+            DslContext context = dsl_context(analyzer);
+            return dsl_analyze_reduction(&context, node, allow_void_call);
+        }
         return analyze_call(analyzer, node, allow_void_call);
     case AST_INDEX_EXPR:
         return analyze_index(analyzer, node);
@@ -881,11 +905,19 @@ static size_t whole_vector_symbol(SemanticAnalyzer *analyzer, const AstNode *nod
 
 static void analyze_assignment(SemanticAnalyzer *analyzer, AstNode *node)
 {
+    DslContext context = dsl_context(analyzer); /* Frente dsl-mlir */
     AstNode *target_node = node->as.assignment.target;
     AstNode *value_node = node->as.assignment.value;
-    size_t target_vector = whole_vector_symbol(analyzer, target_node);
+    size_t target_vector;
     size_t target;
     size_t value;
+    /* A DSL vetorial trata `c receba a + b` (e `-`, `*`) com vetores inteiros;
+     * qualquer outra atribuicao de vetor inteiro continua recusada (E-SEM-026). */
+    if (dsl_claims_assignment(&context, node)) {
+        dsl_analyze_assignment(&context, node);
+        return;
+    }
+    target_vector = whole_vector_symbol(analyzer, target_node);
     if (target_vector != SYMBOL_ID_NONE) {
         /* Vetor inteiro como alvo (`destino receba origem`): a linguagem nao
          * copia vetores (D-006), entao ha um erro so, no alvo. Se o valor
@@ -1333,6 +1365,7 @@ FrontendStatus semantic_analyze(const SourceFile *source,
     errors_before = diagnostics->error_count;
 
     if (!declare_builtins(&analyzer) ||
+        !dsl_declare_builtins(result) || /* Frente dsl-mlir: somavet, maxvet, prodesc */
         !collect_record_names(&analyzer, root) ||
         !collect_function_signatures(&analyzer, root)) {
         return FRONTEND_STATUS_INTERNAL_ERROR;
