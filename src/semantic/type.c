@@ -232,3 +232,15 @@ int type_is_assignable(size_t target_type_id, size_t value_type_id)
             (target_type_id == TYPE_ID_FLOAT || target_type_id == TYPE_ID_DOUBLE)) ||
            (value_type_id == TYPE_ID_FLOAT && target_type_id == TYPE_ID_DOUBLE);
 }
+
+size_t type_common_numeric(size_t left, size_t right)
+{
+    int left_numeric = left == TYPE_ID_INTEGER || left == TYPE_ID_FLOAT ||
+                       left == TYPE_ID_DOUBLE;
+    int right_numeric = right == TYPE_ID_INTEGER || right == TYPE_ID_FLOAT ||
+                        right == TYPE_ID_DOUBLE;
+    if (!left_numeric || !right_numeric) return TYPE_ID_ERROR;
+    if (left == TYPE_ID_DOUBLE || right == TYPE_ID_DOUBLE) return TYPE_ID_DOUBLE;
+    if (left == TYPE_ID_FLOAT || right == TYPE_ID_FLOAT) return TYPE_ID_FLOAT;
+    return TYPE_ID_INTEGER;
+}

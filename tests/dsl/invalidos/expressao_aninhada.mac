@@ -1,0 +1,6 @@
+inteira principal() @
+[
+    inteira vet{2} a, b, c;
+    c receba (a + b) * a;
+    respost 0;
+]

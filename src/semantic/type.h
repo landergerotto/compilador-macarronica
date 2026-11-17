@@ -89,4 +89,7 @@ int type_is_scalar(const TypeTable *table, size_t type_id);
  */
 int type_is_assignable(size_t target_type_id, size_t value_type_id);
 
+/* Promocao exclusiva das operacoes da DSL: inteira < flut < duplocarpado. */
+size_t type_common_numeric(size_t left_type_id, size_t right_type_id);
+
 #endif

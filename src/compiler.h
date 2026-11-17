@@ -15,6 +15,7 @@ typedef struct {
     int emit_c;
     int target_esp32;
     size_t ram_limit;
+    int emit_mlir;
 } CompilerOptions;
 
 /* O numero que o programa devolve quando termina. */

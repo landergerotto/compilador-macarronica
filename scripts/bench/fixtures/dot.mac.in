@@ -1,0 +1,8 @@
+inteira vet{BENCHSIZE} a, b;
+inteira resultado;
+
+inteira principal() @
+[
+    resultado receba prodesc(a, b);
+    respost 0;
+]

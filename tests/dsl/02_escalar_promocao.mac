@@ -1,0 +1,26 @@
+inteira principal() @
+[
+    inteira vet{3} a;
+    flut vet{3} c;
+    flut elemento, referencia;
+    inteira i;
+    repete (i receba 0, i < 3, i receba i + 1) edai
+    [ a{i} receba i + 1; ]
+    c receba 1.5 * a;
+    repete (i receba 0, i < 3, i receba i + 1) edai
+    [
+        elemento receba a{i};
+        referencia receba 1.5 * elemento;
+        cond (c{i} ! referencia) edai [ respost 1; ]
+    ]
+    c receba a * (1.0 + 0.5);
+    repete (i receba 0, i < 3, i receba i + 1) edai
+    [
+        elemento receba a{i};
+        referencia receba elemento * 1.5;
+        cond (c{i} ! referencia) edai [ respost 2; ]
+    ]
+    imprimePalavra("escalar promocao OK");
+    imprimeNl();
+    respost 0;
+]

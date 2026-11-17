@@ -1,0 +1,25 @@
+inteira principal() @
+[
+    inteira vet{3} a;
+    flut vet{3} b;
+    duplocarpado resultado;
+    flut convertido, referencia;
+    inteira i;
+    repete (i receba 0, i < 3, i receba i + 1) edai
+    [
+        a{i} receba i + 1;
+        convertido receba i;
+        b{i} receba convertido + 0.5;
+    ]
+    repete (i receba 0, i < 3, i receba i + 1) edai
+    [
+        convertido receba a{i};
+        referencia receba referencia + convertido * b{i};
+    ]
+    resultado receba prodesc(a, b);
+    convertido receba prodesc(a, b);
+    cond (convertido ! referencia) edai [ respost 1; ]
+    imprimeDuplocarpado(resultado);
+    imprimeNl();
+    respost 0;
+]

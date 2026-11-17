@@ -1,0 +1,7 @@
+inteira principal() @
+[
+    inteira vet{2} c;
+    flut vet{2} a, b;
+    c receba a + b;
+    respost 0;
+]

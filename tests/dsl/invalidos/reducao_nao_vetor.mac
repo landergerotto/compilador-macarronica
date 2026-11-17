@@ -1,0 +1,6 @@
+inteira principal() @
+[
+    inteira a;
+    imprimeInteira(somavet(a));
+    respost 0;
+]

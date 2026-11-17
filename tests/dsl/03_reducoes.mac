@@ -1,0 +1,22 @@
+inteira principal() @
+[
+    inteira vet{4} a;
+    inteira vet{1} unico;
+    inteira i, soma, maior;
+    repete (i receba 0, i < 4, i receba i + 1) edai
+    [ a{i} receba i - 3; ]
+    maior receba a{0};
+    repete (i receba 0, i < 4, i receba i + 1) edai
+    [
+        soma receba soma + a{i};
+        cond (a{i} > maior) edai [ maior receba a{i}; ]
+    ]
+    cond (somavet(a) ! soma) edai [ respost 1; ]
+    cond (maxvet(a) ! maior) edai [ respost 2; ]
+    unico{0} receba -7;
+    cond (somavet(unico) ! unico{0}) edai [ respost 3; ]
+    cond (maxvet(unico) ! unico{0}) edai [ respost 4; ]
+    imprimePalavra("reducoes OK");
+    imprimeNl();
+    respost 0;
+]

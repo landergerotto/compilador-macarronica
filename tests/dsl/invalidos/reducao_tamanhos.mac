@@ -1,0 +1,7 @@
+inteira principal() @
+[
+    inteira vet{2} a;
+    inteira vet{3} b;
+    imprimeInteira(prodesc(a, b));
+    respost 0;
+]

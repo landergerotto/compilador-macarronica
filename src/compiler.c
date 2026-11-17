@@ -8,6 +8,8 @@
 #include "parser/parser.h"
 #include "semantic/semantic.h"
 #include "ir/codegen_llvm.h"
+#include "ir/codegen_mlir.h"
+#include "ir/dsl.h"
 #include "codegen_c.h"
 #include "target.h"
 
@@ -39,7 +41,7 @@ static CompilerExitCode write_generated_output(const SourceFile *source,
                                           const SemanticResult *semantic,
                                           DiagnosticBag *diagnostics,
                                           const char *output_path,
-                                          int emit_c)
+                                          int emit_c, int emit_mlir)
 {
     FILE *temporary = tmpfile();
     FILE *output = NULL;
@@ -55,7 +57,8 @@ static CompilerExitCode write_generated_output(const SourceFile *source,
                       output_path, strerror(errno));
         return COMPILER_EXIT_IO_ERROR;
     }
-    status = emit_c ? codegen_c_emit(source, program, semantic, diagnostics, temporary)
+    status = emit_mlir ? codegen_mlir_emit(source, program, semantic, diagnostics, temporary)
+                    : emit_c ? codegen_c_emit(source, program, semantic, diagnostics, temporary)
                     : codegen_llvm_emit(source, program, semantic, diagnostics, temporary);
     if (status != FRONTEND_STATUS_OK) {
         result = ferror(temporary) ? COMPILER_EXIT_IO_ERROR :
@@ -192,14 +195,14 @@ CompilerExitCode compiler_compile_file(const char *path,
     }
     if (options->output_path != NULL) {
         exit_code = write_generated_output(&source, program, &semantic, &diagnostics,
-                                           options->output_path, options->emit_c);
+                                           options->output_path, options->emit_c, options->emit_mlir);
         if (exit_code != COMPILER_EXIT_SUCCESS) goto diagnostics_and_cleanup;
     }
     exit_code = COMPILER_EXIT_SUCCESS;
     if (!options->dump_tokens && !options->dump_ast && !options->dump_symbols) {
         if (options->output_path != NULL)
             (void)printf("%s: %s gerado em %s\n", path,
-                          options->emit_c ? "C99" : "LLVM IR", options->output_path);
+                          options->emit_mlir ? "MLIR" : options->emit_c ? "C99" : "LLVM IR", options->output_path);
         else
             (void)printf("%s: arquivo lexica, sintatica e semanticamente valido\n", path);
     }

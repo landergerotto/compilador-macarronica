@@ -47,7 +47,10 @@ typedef enum {
     BUILTIN_PIN_MODE,
     BUILTIN_PIN_WRITE,
     BUILTIN_PIN_READ,
-    BUILTIN_DELAY_MS
+    BUILTIN_DELAY_MS,
+    BUILTIN_VECTOR_SUM,
+    BUILTIN_VECTOR_MAX,
+    BUILTIN_VECTOR_DOT
 } BuiltinKind;
 
 /* Escopos que existem hoje. cond, repete e durante nao criam um novo. */

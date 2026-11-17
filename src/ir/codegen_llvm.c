@@ -1,4 +1,5 @@
 #include "codegen_llvm.h"
+#include "dsl.h"
 
 #include <float.h>
 #include <inttypes.h>
@@ -130,6 +131,12 @@ static void emit_guard(Codegen *gen, LlvmValue bad, int code, size_t line)
 static LlvmValue emit_expression(Codegen *gen, const AstNode *node);
 static void emit_statement(Codegen *gen, const AstNode *node);
 
+static int is_array(Codegen *gen, const AstNode *node)
+{
+    const Type *type = type_table_get(&gen->semantic->types, node->semantic.type_id);
+    return type != NULL && type->kind == TYPE_ARRAY;
+}
+
 /* O destino e calculado antes do RHS. Este helper nunca carrega o valor. */
 static LlvmValue emit_address(Codegen *gen, const AstNode *node)
 {
@@ -231,6 +238,70 @@ static const char *builtin_name(BuiltinKind kind)
     }
 }
 
+/* The host calls MLIR kernels through a fixed bare-pointer ABI. Scalar
+ * arguments are evaluated once, in source order, before entering the loop. */
+static LlvmValue emit_dsl_call(Codegen *gen, const AstNode *node,
+                              const AstNode *destination)
+{
+    const AstNode *args[2];
+    LlvmValue values[2], address = value_empty(TYPE_ID_NONE);
+    LlvmValue result = value_empty(node->semantic.type_id);
+    size_t count, i;
+    if (destination != NULL) {
+        address = emit_address(gen, destination);
+        args[0] = node->as.binary_expr.left;
+        args[1] = node->as.binary_expr.right;
+        count = 2U;
+    } else {
+        count = node->as.call_expr.arguments.count;
+        for (i = 0U; i < count; ++i) args[i] = node->as.call_expr.arguments.items[i];
+    }
+    for (i = 0U; i < count; ++i)
+        values[i] = is_array(gen, args[i]) ? emit_address(gen, args[i]) : emit_expression(gen, args[i]);
+    if (destination != NULL) write_ir(gen, "  call void ");
+    else {
+        result = new_temporary(gen, node->semantic.type_id);
+        write_ir(gen, "  %s = call ", result.operand);
+        emit_type(gen, result.type_id);
+        write_ir(gen, " ");
+    }
+    write_ir(gen, "@mac_vec_%zu(", node->node_id);
+    if (destination != NULL) write_ir(gen, "ptr %s, ", address.operand);
+    for (i = 0U; i < count; ++i) {
+        if (i != 0U) write_ir(gen, ", ");
+        if (is_array(gen, args[i])) write_ir(gen, "ptr %s", values[i].operand);
+        else emit_typed_value(gen, values[i]);
+    }
+    write_ir(gen, ")\n");
+    return result;
+}
+
+static void emit_dsl_declaration(const AstNode *node, const AstNode *destination, void *context)
+{
+    Codegen *gen = (Codegen *)context;
+    const AstNode *args[2];
+    size_t count, i;
+    write_ir(gen, "declare ");
+    if (destination != NULL) {
+        write_ir(gen, "void");
+        args[0] = node->as.binary_expr.left;
+        args[1] = node->as.binary_expr.right;
+        count = 2U;
+    } else {
+        emit_type(gen, node->semantic.type_id);
+        count = node->as.call_expr.arguments.count;
+        for (i = 0U; i < count; ++i) args[i] = node->as.call_expr.arguments.items[i];
+    }
+    write_ir(gen, " @mac_vec_%zu(", node->node_id);
+    if (destination != NULL) write_ir(gen, "ptr, ");
+    for (i = 0U; i < count; ++i) {
+        if (i != 0U) write_ir(gen, ", ");
+        if (is_array(gen, args[i])) write_ir(gen, "ptr");
+        else emit_type(gen, args[i]->semantic.type_id);
+    }
+    write_ir(gen, ") nounwind\n");
+}
+
 static LlvmValue emit_call(Codegen *gen, const AstNode *node)
 {
     const Symbol *function = symbol_table_get(&gen->semantic->symbols, node->semantic.symbol_id);
@@ -239,6 +310,8 @@ static LlvmValue emit_call(Codegen *gen, const AstNode *node)
     LlvmValue result = value_empty(node->semantic.type_id);
     size_t index;
     const char *builtin;
+    if ((node->semantic.flags & AST_SEMANTIC_DSL) != 0U)
+        return emit_dsl_call(gen, node, NULL);
     if (function == NULL || function->parameter_count != arguments->count) {
         fail(gen, node, "E-IR-002", "assinatura ausente ou incoerente na chamada");
         return result;
@@ -578,6 +651,10 @@ static void emit_statement(Codegen *gen, const AstNode *node)
     case AST_VECTOR_DECL: break; /* Armazenamento e inicializacao ja ocorreram no entry. */
     case AST_ASSIGNMENT: {
         const AstNode *target = node->as.assignment.target;
+        if (is_array(gen, target)) {
+            (void)emit_dsl_call(gen, node->as.assignment.value, target);
+            break;
+        }
         LlvmValue address = emit_address(gen, target);
         LlvmValue value;
         value = emit_expression(gen, node->as.assignment.value);
@@ -819,6 +896,7 @@ FrontendStatus codegen_llvm_emit(const SourceFile *source,
     visit_tree(&gen, program, 1);
     write_ir(&gen, "\n");
     emit_runtime_declarations(&gen);
+    dsl_visit(program, emit_dsl_declaration, &gen);
     for (index = 0U; index < program->as.program.declarations.count; ++index) {
         const AstNode *declaration = program->as.program.declarations.items[index];
         if (declaration->kind == AST_FUNCTION_DECL) emit_function(&gen, declaration);

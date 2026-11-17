@@ -1,0 +1,6 @@
+inteira principal() @
+[
+    bool vet{2} a, b, c;
+    c receba a + b;
+    respost 0;
+]

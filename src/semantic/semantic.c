@@ -196,7 +196,11 @@ static int declare_builtins(SemanticAnalyzer *analyzer)
         { "pinoModo", BUILTIN_PIN_MODE, TYPE_ID_VOID, { TYPE_ID_INTEGER, TYPE_ID_INTEGER }, 2U },
         { "pinoEscreve", BUILTIN_PIN_WRITE, TYPE_ID_VOID, { TYPE_ID_INTEGER, TYPE_ID_BOOL }, 2U },
         { "pinoLe", BUILTIN_PIN_READ, TYPE_ID_BOOL, { TYPE_ID_INTEGER }, 1U },
-        { "espera", BUILTIN_DELAY_MS, TYPE_ID_VOID, { TYPE_ID_INTEGER }, 1U }
+        { "espera", BUILTIN_DELAY_MS, TYPE_ID_VOID, { TYPE_ID_INTEGER }, 1U },
+        /* TYPE_ID_NONE e assinatura contextual, nao curinga de chamada comum. */
+        { "somavet", BUILTIN_VECTOR_SUM, TYPE_ID_NONE, { TYPE_ID_NONE }, 1U },
+        { "maxvet", BUILTIN_VECTOR_MAX, TYPE_ID_NONE, { TYPE_ID_NONE }, 1U },
+        { "prodesc", BUILTIN_VECTOR_DOT, TYPE_ID_NONE, { TYPE_ID_NONE, TYPE_ID_NONE }, 2U }
     };
     SourceSpan span = source_span(source_position(0U, 0U, 0U),
                                   source_position(0U, 0U, 0U));
@@ -410,6 +414,75 @@ static size_t analyze_identifier(SemanticAnalyzer *analyzer, AstNode *node)
     return symbol->type_id;
 }
 
+/* Um vetor inteiro so e legivel nos operandos explicitamente vetoriais da DSL.
+ * Nao mudar analyze_identifier preserva a rejeicao de copia/argumento comum. */
+static size_t analyze_dsl_operand(SemanticAnalyzer *analyzer, AstNode *node)
+{
+    if (node != NULL && node->kind == AST_IDENTIFIER_EXPR) {
+        size_t symbol_id = symbol_table_lookup(&analyzer->result->symbols,
+                              analyzer->current_scope_id, SYMBOL_NAMESPACE_VALUE,
+                              node->as.identifier_expr.name);
+        const Symbol *symbol = symbol_table_get(&analyzer->result->symbols, symbol_id);
+        const Type *type = symbol != NULL
+                         ? type_table_get(&analyzer->result->types, symbol->type_id)
+                         : NULL;
+        if (type != NULL && type->kind == TYPE_ARRAY) {
+            annotate(node, type->id, symbol_id,
+                     AST_SEMANTIC_ARRAY | AST_SEMANTIC_LVALUE | AST_SEMANTIC_RVALUE);
+            return type->id;
+        }
+    }
+    return analyze_expression(analyzer, node, 0);
+}
+
+static size_t analyze_dsl_call(SemanticAnalyzer *analyzer, AstNode *node,
+                               const Symbol *function, int allow_void_call)
+{
+    size_t i, result = TYPE_ID_NONE;
+    long long size = -1;
+    int failed = 0;
+    size_t expected = function->builtin_kind == BUILTIN_VECTOR_DOT ? 2U : 1U;
+    if (node->as.call_expr.arguments.count != expected) {
+        semantic_error(analyzer, node->span, "E-DSL-001",
+                       "'%s' espera %zu vetor(es), recebeu %zu", function->name,
+                       expected, node->as.call_expr.arguments.count);
+        failed = 1;
+    }
+    for (i = 0U; i < node->as.call_expr.arguments.count; ++i) {
+        AstNode *arg = node->as.call_expr.arguments.items[i];
+        size_t actual = analyze_dsl_operand(analyzer, arg);
+        const Type *type = type_table_get(&analyzer->result->types, actual);
+        if (actual == TYPE_ID_ERROR) {
+            failed = 1;
+        } else if (arg->kind != AST_IDENTIFIER_EXPR || type == NULL ||
+                   type->kind != TYPE_ARRAY ||
+                   !type_is_numeric(&analyzer->result->types, type->element_type_id)) {
+            semantic_error(analyzer, arg->span, "E-DSL-002",
+                           "'%s' exige identificador de vetor numerico", function->name);
+            failed = 1;
+        } else {
+            if (size >= 0 && size != type->array_size) {
+                semantic_error(analyzer, arg->span, "E-DSL-003",
+                               "vetores de '%s' tem tamanhos diferentes: %lld e %lld",
+                               function->name, size, type->array_size);
+                failed = 1;
+            }
+            size = type->array_size;
+            result = result == TYPE_ID_NONE ? type->element_type_id
+                       : type_common_numeric(result, type->element_type_id);
+        }
+    }
+    if (allow_void_call) {
+        semantic_error(analyzer, node->span, "E-DSL-004",
+                       "resultado de '%s' deve ser usado como valor", function->name);
+        failed = 1;
+    }
+    if (result == TYPE_ID_NONE || result == TYPE_ID_ERROR) failed = 1;
+    annotate(node, failed ? TYPE_ID_ERROR : result, function->id,
+             AST_SEMANTIC_DSL | (failed ? AST_SEMANTIC_ERROR : AST_SEMANTIC_RVALUE));
+    return failed ? TYPE_ID_ERROR : result;
+}
+
 static size_t analyze_call(SemanticAnalyzer *analyzer, AstNode *node,
                            int allow_void_call)
 {
@@ -421,6 +494,12 @@ static size_t analyze_call(SemanticAnalyzer *analyzer, AstNode *node,
     size_t index;
     size_t argument_count = node->as.call_expr.arguments.count;
     int call_has_error = 0;
+    if (function != NULL &&
+        (function->builtin_kind == BUILTIN_VECTOR_SUM ||
+         function->builtin_kind == BUILTIN_VECTOR_MAX ||
+         function->builtin_kind == BUILTIN_VECTOR_DOT)) {
+        return analyze_dsl_call(analyzer, node, function, allow_void_call);
+    }
     if (function == NULL) {
         size_t value_id = symbol_table_lookup(&analyzer->result->symbols,
                                               analyzer->current_scope_id,
@@ -715,12 +794,47 @@ static size_t analyze_field(SemanticAnalyzer *analyzer, AstNode *node)
 
 static size_t analyze_binary(SemanticAnalyzer *analyzer, AstNode *node)
 {
-    size_t left = analyze_expression(analyzer, node->as.binary_expr.left, 0);
-    size_t right = analyze_expression(analyzer, node->as.binary_expr.right, 0);
+    size_t left = analyze_dsl_operand(analyzer, node->as.binary_expr.left);
+    size_t right = analyze_dsl_operand(analyzer, node->as.binary_expr.right);
     size_t result_type = TYPE_ID_ERROR;
     int valid = 0;
+    const Type *left_type = type_table_get(&analyzer->result->types, left);
+    const Type *right_type = type_table_get(&analyzer->result->types, right);
+    int left_array = left_type != NULL && left_type->kind == TYPE_ARRAY;
+    int right_array = right_type != NULL && right_type->kind == TYPE_ARRAY;
     if (left == TYPE_ID_ERROR || right == TYPE_ID_ERROR)
         return invalid_operator(analyzer, node, left, right);
+    if (left_array || right_array) {
+        AstOperator op = node->as.binary_expr.operator_kind;
+        size_t left_element = left_array ? left_type->element_type_id : left;
+        size_t right_element = right_array ? right_type->element_type_id : right;
+        size_t common = type_common_numeric(left_element, right_element);
+        long long size = left_array ? left_type->array_size : right_type->array_size;
+        int shape_valid = (left_array && right_array &&
+                           (op == AST_OP_ADD || op == AST_OP_SUBTRACT ||
+                            op == AST_OP_MULTIPLY)) ||
+                          ((left_array != right_array) && op == AST_OP_MULTIPLY);
+        if (!shape_valid || common == TYPE_ID_ERROR) {
+            semantic_error(analyzer, node->span, "E-DSL-005",
+                           "DSL aceita vetores numericos com +, - ou *, e escalar * vetor");
+        } else if ((left_array && node->as.binary_expr.left->kind != AST_IDENTIFIER_EXPR) ||
+                   (right_array && node->as.binary_expr.right->kind != AST_IDENTIFIER_EXPR)) {
+            semantic_error(analyzer, node->span, "E-DSL-006",
+                           "operando vetorial deve ser identificador; separe operacoes em atribuicoes");
+        } else if (left_array && right_array && left_type->array_size != right_type->array_size) {
+            semantic_error(analyzer, node->span, "E-DSL-003",
+                           "vetores tem tamanhos diferentes: %lld e %lld",
+                           left_type->array_size, right_type->array_size);
+        } else if (!type_table_add_array(&analyzer->result->types, common, size, &result_type)) {
+            allocation_error(analyzer, node->span);
+        } else {
+            annotate(node, result_type, SYMBOL_ID_NONE,
+                     AST_SEMANTIC_DSL | AST_SEMANTIC_ARRAY | AST_SEMANTIC_RVALUE);
+            return result_type;
+        }
+        annotate(node, TYPE_ID_ERROR, SYMBOL_ID_NONE, AST_SEMANTIC_DSL | AST_SEMANTIC_ERROR);
+        return TYPE_ID_ERROR;
+    }
     switch (node->as.binary_expr.operator_kind) {
     case AST_OP_ADD:
     case AST_OP_SUBTRACT:
@@ -879,8 +993,32 @@ static size_t analyze_expression(SemanticAnalyzer *analyzer, AstNode *node,
 
 static void analyze_assignment(SemanticAnalyzer *analyzer, AstNode *node)
 {
-    size_t target = analyze_expression(analyzer, node->as.assignment.target, 0);
+    size_t target = analyze_dsl_operand(analyzer, node->as.assignment.target);
     size_t value = analyze_expression(analyzer, node->as.assignment.value, 0);
+    const Type *target_type = type_table_get(&analyzer->result->types, target);
+    const Type *value_type = type_table_get(&analyzer->result->types, value);
+    if (target_type != NULL && target_type->kind == TYPE_ARRAY) {
+        int valid = value != TYPE_ID_ERROR;
+        if (valid && (node->as.assignment.value->kind != AST_BINARY_EXPR ||
+                      (node->as.assignment.value->semantic.flags & AST_SEMANTIC_DSL) == 0U ||
+                      value_type == NULL || value_type->kind != TYPE_ARRAY)) {
+            semantic_error(analyzer, node->span, "E-DSL-007",
+                           "atribuicao a vetor exige operacao vetorial; copia pura nao e permitida");
+            valid = 0;
+        }
+        if (valid && (target_type->array_size != value_type->array_size ||
+                      !type_is_assignable(target_type->element_type_id,
+                                          value_type->element_type_id))) {
+            semantic_error(analyzer, node->span, "E-DSL-008",
+                           "destino vetorial tem tamanho ou tipo de elemento incompativel; narrowing proibido");
+            valid = 0;
+        }
+        annotate(node, valid ? target : TYPE_ID_ERROR,
+                 node->as.assignment.target->semantic.symbol_id,
+                 AST_SEMANTIC_DSL | AST_SEMANTIC_ARRAY |
+                 (valid ? 0U : AST_SEMANTIC_ERROR));
+        return;
+    }
     if ((node->as.assignment.target->semantic.flags & AST_SEMANTIC_LVALUE) == 0U &&
         target != TYPE_ID_ERROR) {
         semantic_error(analyzer, node->as.assignment.target->span, "E-SEM-019",

@@ -28,6 +28,8 @@
 #define AST_SEMANTIC_CONSTANT 0x04U
 #define AST_SEMANTIC_ERROR 0x08U
 #define AST_SEMANTIC_ARRAY 0x10U
+/* Operacao vetorial/reducao da DSL, rebaixada por MLIR pelo backend. */
+#define AST_SEMANTIC_DSL 0x20U
 
 /*
  * Tudo que a semantica montou fica aqui. Como a AST guarda IDs dessas tabelas,

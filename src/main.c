@@ -13,6 +13,7 @@ static void print_usage(FILE *stream, const char *program_name)
     (void)fprintf(stream,
                   "Uso: %s [--dump-tokens] [--dump-ast] [--dump-symbols] arquivo.mac [-o saida.ll]\n"
                   "     --emit-c -o saida.c       gera C99 da AST validada\n"
+                  "     --emit-mlir -o nucleos.mlir gera nucleos vetoriais MLIR\n"
                   "     --alvo=esp32             gera C para ESP-IDF\n"
                   "     --ram-limite=BYTES       orcamento fonte ESP32 (padrao: 65536)\n"
                   "     %s --help\n"
@@ -33,7 +34,7 @@ static int has_mac_extension(const char *path)
 
 int main(int argc, char **argv)
 {
-    CompilerOptions options = {0, 0, 0, NULL, 0, 0, 65536U};
+    CompilerOptions options = {0, 0, 0, NULL, 0, 0, 65536U, 0};
     int ram_limit_given = 0;
     const char *input_path = NULL;
     const char *program_name = argc > 0 && argv[0] != NULL ? argv[0] : "macaronica";
@@ -58,6 +59,8 @@ int main(int argc, char **argv)
             options.dump_symbols = 1;
         } else if (strcmp(argument, "--emit-c") == 0) {
             options.emit_c = 1;
+        } else if (strcmp(argument, "--emit-mlir") == 0) {
+            options.emit_mlir = 1;
         } else if (strcmp(argument, "--alvo=esp32") == 0) {
             options.target_esp32 = 1;
             options.emit_c = 1;
@@ -112,8 +115,12 @@ int main(int argc, char **argv)
         (void)fputs("erro: --ram-limite exige --alvo=esp32\n", stderr);
         return COMPILER_EXIT_USAGE_ERROR;
     }
-    if (options.emit_c && options.output_path == NULL) {
-        (void)fputs("erro: --emit-c e --alvo=esp32 exigem -o saida.c\n", stderr);
+    if (options.emit_mlir && options.emit_c) {
+        (void)fputs("erro: --emit-mlir nao pode ser combinado com --emit-c ou --alvo=esp32\n", stderr);
+        return COMPILER_EXIT_USAGE_ERROR;
+    }
+    if ((options.emit_c || options.emit_mlir) && options.output_path == NULL) {
+        (void)fputs("erro: --emit-c, --emit-mlir e --alvo=esp32 exigem -o caminho\n", stderr);
         return COMPILER_EXIT_USAGE_ERROR;
     }
     return (int)compiler_compile_file(input_path, &options);

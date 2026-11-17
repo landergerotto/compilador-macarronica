@@ -30,7 +30,7 @@ SOURCES = \
 	src/semantic/symbol.c \
 	src/semantic/semantic.c
 
-SOURCES += $(wildcard src/ir/codegen_llvm.c src/codegen_c.c src/target.c)
+SOURCES += $(wildcard src/ir/codegen_llvm.c src/ir/codegen_mlir.c src/ir/dsl.c src/codegen_c.c src/target.c)
 
 HEADERS = $(wildcard src/*.h src/*/*.h)
 

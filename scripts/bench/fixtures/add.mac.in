@@ -1,0 +1,7 @@
+flut vet{BENCHSIZE} a, b, c;
+
+inteira principal() @
+[
+    c receba a + b;
+    respost 0;
+]
