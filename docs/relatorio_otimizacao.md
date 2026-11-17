@@ -126,17 +126,77 @@ obrigatória (seção C.8):
 
 ### C.5 Resultados
 
-> **Pendente.** A medição ainda não rodou: o LLVM/MLIR 18 não estava instalado
-> no WSL quando esta seção foi escrita. As tabelas completas e os gráficos saem
-> de `make bench` em [`docs/bench/resultados.md`](bench/resultados.md).
+A medição rodou em 17/11/2026, no WSL, com LLVM/MLIR 18.1.8 num i7-7700HQ
+(4 núcleos, 8 threads, AVX2 e FMA). As 116 medições acertaram a soma de
+referência. As tabelas completas (tempo, speedup, banda, dispersão, C3, a
+pergunta obrigatória e o tempo de compilação) e os gráficos estão em
+[`docs/bench/resultados.md`](bench/resultados.md).
+
+Speedup sobre C0 com N = 10⁷ (mediana de 5 execuções):
+
+| núcleo | C1-escalar | C1 | C2 | C3·4 |
+| --- | ---: | ---: | ---: | ---: |
+| soma i64 | 1,94× | 2,18× | 2,49× | 1,58× |
+| soma f32 | 3,65× | 4,29× | 4,39× | 4,58× |
+| somavet i64 | 5,91× | 6,63× | 6,42× | 10,91× |
+| somavet f32 | 4,02× | 3,95× | 19,74× | 13,49× |
+| prodesc i64 | 3,11× | 3,36× | 2,39× | 4,74× |
+| prodesc f32 | 2,85× | 3,45× | 8,27× | 11,88× |
+
+- **C0 → C1-escalar (2× a 6×):** no `-O0`, o back-end guarda os valores na
+  pilha a cada bloco, e o acumulador e o índice vão e voltam da memória a cada
+  iteração. O `-O2` os mantém em registradores e simplifica o laço.
+- **C1-escalar → C1:** o vetorizador do LLVM ganha pouco nos inteiros
+  (`somavet` i64: 5,91× → 6,63×) e nada nas reduções de flut (`somavet` f32:
+  4,02× → 3,95×), que ele recusa (seção C.8).
+- **C2 e C3** só se destacam nas reduções de flut, as duas que reassociam a
+  soma (seções C.6 e C.7).
 
 ### C.6 C1 (vetorização no LLVM) × C2 (vetorização no MLIR)
 
-> **Pendente** (depende da medição).
+- **Reduções de flut: C2 ganha de longe.** `somavet` f32 com N = 10⁷: 12,19 ms
+  em C1 e 2,44 ms em C2 (5,0×); `prodesc` f32: 11,67 ms e 4,86 ms (2,4×). O
+  `affine-super-vectorize` com `vectorize-reductions=true` troca o acumulador
+  escalar por um `vector<8xf32>` (`docs/bench/evidencias/C2/*.vector.mlir`) e
+  reassocia a soma sem pedir `fastmath`. O LLVM, em C1, recusa a mesma redução
+  (seção C.8). O preço é o resultado: em `somavet` f32 com N = 10⁶, C2 dá
+  499865,281 em vez de 499869,312. Os bits mudam, e o erro em relação à
+  referência em `double` cai de 8,66e-06 para 5,96e-07.
+- **Inteiros: C1 empata ou ganha.** `somavet` i64: 4,56 ms (C1) e 4,72 ms
+  (C2); `prodesc` i64: 8,84 ms e 12,39 ms. Os dois vetorizam. O LLVM usa
+  largura 4 e intercala 4 (`vectorization width: 4, interleaved count: 4`),
+  com 4 acumuladores independentes. C2 usa um `vector<8xi64>`, que no AVX2 vira
+  2 registradores de 4, e o `-fno-vectorize` de C2 impede o LLVM de intercalar
+  por cima. No `prodesc` i64 pesa também a multiplicação de 64 bits, que o AVX2
+  não tem numa instrução só (`vpmullq` é do AVX-512).
+- **`soma` (c = a + b): empate.** 6,74 ms e 6,59 ms em f32 com N = 10⁷. O laço
+  não tem dependência entre iterações e, com 3 vetores de 40 MB, o limite é a
+  banda de memória, não a vetorização.
 
 ### C.7 Escalabilidade com OpenMP (C3)
 
-> **Pendente** (depende da medição).
+Speedup de C3 sobre C3 com 1 thread (4 núcleos físicos; 8 threads usam o
+Hyper-Threading):
+
+| núcleo | N | 2 thr. | 4 thr. | 8 thr. |
+| --- | ---: | ---: | ---: | ---: |
+| somavet f32 | 10⁶ | 1,81× | 3,71× | 2,94× |
+| prodesc f32 | 10⁷ | 2,02× | 3,99× | 3,49× |
+| somavet i64 | 10⁷ | 1,54× | 1,62× | 1,70× |
+| soma f32 | 10⁷ | 1,08× | 1,06× | 0,89× |
+
+- **As reduções de flut escalam quase linearmente até 4 threads**, com
+  eficiência de 79% a 100%. Com 1 thread, o laço é escalar e preso à latência
+  da soma de flut: cada `fadd` espera o anterior. Com `parallel-reductions`,
+  cada thread soma a sua faixa com o seu acumulador, e as 4 cadeias rodam em 4
+  núcleos.
+- **O resto quase não escala** (1,1× a 1,8× com 8 threads). Esses laços já
+  saem vetorizados pelo LLVM em cada thread, e o limite é a banda de memória,
+  que os núcleos dividem: mais threads não trazem mais banda.
+- **8 threads não ajudam.** Com `OMP_PLACES=cores`, as threads 5 a 8 dividem
+  núcleo com as 4 primeiras (Hyper-Threading) e disputam as mesmas unidades e
+  a mesma banda. No pior caso, `somavet` f32 com N = 10⁷, 8 threads levam
+  22,85 ms, contra 3,57 ms com 4 (seção C.9).
 
 ### C.8 Pergunta obrigatória: por que a redução de flut não vetoriza sem `-ffast-math`
 
@@ -175,16 +235,53 @@ obrigatória (seção C.8):
    escreveu. A seção de resultados compara as duas com a referência em
    `double`.
 
-> **Evidências pendentes** (saem de `make bench`): mensagens `-Rpass` de cada
-> variante (`docs/bench/evidencias/rpass/`), a IR com e sem `reassoc`
-> (`docs/bench/evidencias/`), os tempos e a diferença numérica de cada
-> variante (`docs/bench/resultados.md`, seção "Pergunta obrigatória"). Até
-> lá, os itens 2 e 3 descrevem o comportamento esperado do LLVM e do MLIR 18,
-> ainda não confirmado nesta máquina.
+**Evidências (`make bench`, 17/11/2026), que confirmam os itens 2 a 4:**
+
+- Mensagens do vetorizador (`docs/bench/evidencias/rpass/`). Em C1,
+  C1-ffast-math e C-O2, as duas reduções de flut saem com `loop not
+  vectorized: cannot prove it is safe to reorder floating-point operations`.
+  Em C1-reassoc e C-ffast-math, saem com `vectorized loop (vectorization
+  width: 8, interleaved count: 4)`. Os núcleos i64 vetorizam em C1.
+- IR e assembly com e sem `reassoc`: `docs/bench/evidencias/C1/somavet_f32.*`
+  e `docs/bench/evidencias/C1-reassoc/somavet_f32.*`.
+- Tempos e resultado de `somavet` f32 com N = 10⁶ (tabela completa em
+  `docs/bench/resultados.md`, seção "Pergunta obrigatória"):
+
+| variante | ms | sobre C1 | resultado | erro relativo |
+| --- | ---: | ---: | ---: | ---: |
+| C1 | 1,153 | 1,00× | 499869,312 | 8,66e-06 |
+| C1-ffast-math | 1,158 | 1,00× | 499869,312 | 8,66e-06 |
+| C1-ordenada | 1,217 | 0,95× | 499869,312 | 8,66e-06 |
+| C1-reassoc | 0,146 | 7,89× | 499864,938 | 9,03e-08 |
+| C-ffast-math | 0,086 | 13,33× | 499864,938 | 9,03e-08 |
+| C2 | 0,154 | 7,48× | 499865,281 | 5,96e-07 |
+
+- C1-ffast-math dá os mesmos bits e o mesmo tempo de C1: o `-ffast-math` no
+  clang não marca as instruções de um `.ll` que já chega pronto (item 3).
+- C1-ordenada vetoriza, mas não ganha nada: soma um elemento por vez, na
+  ordem do programa, e os bits não mudam.
+- Com a reassociação, o resultado muda de 499869,312 para 499864,938 e fica
+  cerca de 96 vezes mais perto da referência em `double` (item 4).
 
 ### C.9 Resultados inesperados
 
-> **Pendente** (depende da medição).
+- **C-ffast-math é mais rápido que C1-reassoc** em `somavet` f32 (0,086 ms
+  contra 0,146 ms com N = 10⁶), com os mesmos bits no resultado e a mesma
+  vetorização (largura 8, intercalação 4). Não investigamos a diferença. A
+  hipótese é o código em volta do laço: o núcleo do MLIR recebe o descritor do
+  memref (base, deslocamento, tamanho e passo), e o do C recebe um ponteiro.
+- **C2 perde de C1 em `prodesc` i64** (12,39 ms contra 8,84 ms com N = 10⁷): o
+  vetorizador do MLIR não é sempre melhor que o do LLVM (seção C.6).
+- **8 threads pioram `somavet` f32 com N = 10⁷**: 22,85 ms (0,49× sobre 1
+  thread), contra 3,57 ms com 4. É a mediana de 5 execuções, então não é um
+  ponto isolado. A hipótese é a disputa de núcleo do Hyper-Threading, somada
+  ao WSL, que divide os núcleos com o Windows.
+- **C3 com 1 thread perde de C1 em `soma` i64** (1,915 ms contra 1,208 ms com
+  N = 10⁶): é o custo da região paralela da `libomp` e do laço reescrito pelo
+  `convert-scf-to-openmp`, sem ganho de paralelismo para compensar.
+- **Ruído:** a dispersão (máximo − mínimo) / mediana tem mediana de 16,9% e
+  pior caso de 204,3% nas 116 medições. Por isso cada tempo é a mediana de 5,
+  e as conclusões acima só se apoiam em diferenças bem maiores que esse ruído.
 
 ### C.10 Reprodutibilidade
 

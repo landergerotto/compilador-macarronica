@@ -1,0 +1,12 @@
+# -Rpass de C1-reassoc: C1 com fastmath<reassoc> na soma do núcleo MLIR (vira fadd reassoc no LLVM IR)
+# clang -O2 -march=native -Rpass=loop-vectorize -Rpass-missed=loop-vectorize -Rpass-analysis=loop-vectorize
+
+### somavet_f32 (N = 1000000)
+warning: overriding the module target triple with x86_64-pc-linux-gnu [-Woverride-module]
+remark: <unknown>:0:0: vectorized loop (vectorization width: 8, interleaved count: 4) [-Rpass=loop-vectorize]
+1 warning generated.
+
+### prodesc_f32 (N = 1000000)
+warning: overriding the module target triple with x86_64-pc-linux-gnu [-Woverride-module]
+remark: <unknown>:0:0: vectorized loop (vectorization width: 8, interleaved count: 4) [-Rpass=loop-vectorize]
+1 warning generated.

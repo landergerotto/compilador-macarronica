@@ -5,9 +5,10 @@ que foi feito assim e onde está no repositório. O relatório formal é a Parte
 de `docs/relatorio_otimizacao.md`; os números saem de `make bench` em
 `docs/bench/resultados.md`.
 
-> **Estado:** os scripts, os núcleos, o driver, os gráficos, o `make bench` e o
-> `Dockerfile` estão prontos. A medição ainda não rodou, porque o LLVM/MLIR 18
-> não estava instalado no WSL. As seções marcadas com "pendente" dependem dela.
+> **Estado:** a medição rodou em 17/11/2026 no WSL (LLVM/MLIR 18.1.8,
+> i7-7700HQ, `-march=native` = skylake). Os números estão em
+> `docs/bench/resultados.md` e a análise, nas seções C.5 a C.9 de
+> `docs/relatorio_otimizacao.md`.
 
 ## 1. O que foi medido e por quê
 
@@ -151,7 +152,7 @@ vetoriza.
   variante, a causa é a ordem das somas. Com `-ffast-math`, o FMA pode entrar
   junto.
 
-**Evidências (pendente, saem de `make bench`):** `docs/bench/evidencias/rpass/`
+**Evidências (`make bench`, 17/11/2026):** `docs/bench/evidencias/rpass/`
 (mensagens de cada configuração), `docs/bench/evidencias/C1/somavet_f32.*` e
 `docs/bench/evidencias/C1-reassoc/somavet_f32.*` (IR e assembly com e sem
 `reassoc`), e a tabela "Pergunta obrigatória" em `docs/bench/resultados.md`

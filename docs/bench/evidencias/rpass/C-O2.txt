@@ -1,0 +1,18 @@
+# -Rpass de C-O2: a mesma redução escrita em C (referencia_c.c), clang -O2 -ffp-contract=off
+# clang -O2 -march=native -ffp-contract=off -Rpass=loop-vectorize -Rpass-missed=loop-vectorize -Rpass-analysis=loop-vectorize
+
+### somavet_f32 (N = 1000000)
+/tmp/macaronica-bench/completo/scripts/referencia_c.c:27:11: remark: loop not vectorized: cannot prove it is safe to reorder floating-point operations; allow reordering by specifying '#pragma clang loop vectorize(enable)' before the loop or by providing the compiler option '-ffast-math'. [-Rpass-analysis=loop-vectorize]
+   27 |         s += a[i];
+      |           ^
+/tmp/macaronica-bench/completo/scripts/referencia_c.c:26:5: remark: loop not vectorized [-Rpass-missed=loop-vectorize]
+   26 |     for (size_t i = 0; i < (size_t)(N); i++)
+      |     ^
+
+### prodesc_f32 (N = 1000000)
+/tmp/macaronica-bench/completo/scripts/referencia_c.c:37:11: remark: loop not vectorized: cannot prove it is safe to reorder floating-point operations; allow reordering by specifying '#pragma clang loop vectorize(enable)' before the loop or by providing the compiler option '-ffast-math'. [-Rpass-analysis=loop-vectorize]
+   37 |         s += a[i] * b[i];
+      |           ^
+/tmp/macaronica-bench/completo/scripts/referencia_c.c:36:5: remark: loop not vectorized [-Rpass-missed=loop-vectorize]
+   36 |     for (size_t i = 0; i < (size_t)(N); i++)
+      |     ^

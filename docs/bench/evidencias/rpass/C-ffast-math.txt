@@ -1,0 +1,12 @@
+# -Rpass de C-ffast-math: a mesma redução escrita em C, clang -O2 -ffast-math
+# clang -O2 -march=native -ffast-math -Rpass=loop-vectorize -Rpass-missed=loop-vectorize -Rpass-analysis=loop-vectorize
+
+### somavet_f32 (N = 1000000)
+/tmp/macaronica-bench/completo/scripts/referencia_c.c:26:5: remark: vectorized loop (vectorization width: 8, interleaved count: 4) [-Rpass=loop-vectorize]
+   26 |     for (size_t i = 0; i < (size_t)(N); i++)
+      |     ^
+
+### prodesc_f32 (N = 1000000)
+/tmp/macaronica-bench/completo/scripts/referencia_c.c:36:5: remark: vectorized loop (vectorization width: 8, interleaved count: 4) [-Rpass=loop-vectorize]
+   36 |     for (size_t i = 0; i < (size_t)(N); i++)
+      |     ^

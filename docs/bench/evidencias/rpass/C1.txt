@@ -1,0 +1,34 @@
+# -Rpass de C1: clang -O2: otimização genérica e autovetorização do LLVM
+# clang -O2 -march=native -Rpass=loop-vectorize -Rpass-missed=loop-vectorize -Rpass-analysis=loop-vectorize
+
+### soma_i64 (N = 1000000)
+warning: overriding the module target triple with x86_64-pc-linux-gnu [-Woverride-module]
+remark: <unknown>:0:0: vectorized loop (vectorization width: 4, interleaved count: 4) [-Rpass=loop-vectorize]
+1 warning generated.
+
+### soma_f32 (N = 1000000)
+warning: overriding the module target triple with x86_64-pc-linux-gnu [-Woverride-module]
+remark: <unknown>:0:0: vectorized loop (vectorization width: 8, interleaved count: 4) [-Rpass=loop-vectorize]
+1 warning generated.
+
+### somavet_i64 (N = 1000000)
+warning: overriding the module target triple with x86_64-pc-linux-gnu [-Woverride-module]
+remark: <unknown>:0:0: vectorized loop (vectorization width: 4, interleaved count: 4) [-Rpass=loop-vectorize]
+1 warning generated.
+
+### somavet_f32 (N = 1000000)
+warning: overriding the module target triple with x86_64-pc-linux-gnu [-Woverride-module]
+remark: <unknown>:0:0: loop not vectorized: cannot prove it is safe to reorder floating-point operations; allow reordering by specifying '#pragma clang loop vectorize(enable)' before the loop or by providing the compiler option '-ffast-math'. [-Rpass-analysis=loop-vectorize]
+remark: <unknown>:0:0: loop not vectorized [-Rpass-missed=loop-vectorize]
+1 warning generated.
+
+### prodesc_i64 (N = 1000000)
+warning: overriding the module target triple with x86_64-pc-linux-gnu [-Woverride-module]
+remark: <unknown>:0:0: vectorized loop (vectorization width: 4, interleaved count: 4) [-Rpass=loop-vectorize]
+1 warning generated.
+
+### prodesc_f32 (N = 1000000)
+warning: overriding the module target triple with x86_64-pc-linux-gnu [-Woverride-module]
+remark: <unknown>:0:0: loop not vectorized: cannot prove it is safe to reorder floating-point operations; allow reordering by specifying '#pragma clang loop vectorize(enable)' before the loop or by providing the compiler option '-ffast-math'. [-Rpass-analysis=loop-vectorize]
+remark: <unknown>:0:0: loop not vectorized [-Rpass-missed=loop-vectorize]
+1 warning generated.

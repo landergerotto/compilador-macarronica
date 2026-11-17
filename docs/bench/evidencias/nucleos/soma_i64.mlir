@@ -1,0 +1,17 @@
+// Núcleo elemento a elemento em inteira (i64): c[i] = a[i] + b[i].
+// Na DSL: "c receba a + b;" com vetores inteira de N elementos.
+//
+// Escrito à mão para a Parte C, no formato que o compilador emite para a DSL:
+// tamanho conhecido em compilação (memref estático), um laço affine e só os
+// dialetos func, arith, memref e affine. scripts/bench/medir.py troca 1000000 pelo
+// número de elementos (10^6 ou 10^7) antes de rodar o pipeline.
+func.func @soma_i64(%a: memref<1000000xi64>, %b: memref<1000000xi64>,
+                    %c: memref<1000000xi64>) {
+  affine.for %i = 0 to 1000000 {
+    %x = affine.load %a[%i] : memref<1000000xi64>
+    %y = affine.load %b[%i] : memref<1000000xi64>
+    %s = arith.addi %x, %y : i64
+    affine.store %s, %c[%i] : memref<1000000xi64>
+  }
+  return
+}

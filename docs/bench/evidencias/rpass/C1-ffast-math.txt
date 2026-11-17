@@ -1,0 +1,14 @@
+# -Rpass de C1-ffast-math: C1 com -ffast-math no clang, sobre o mesmo .ll sem reassoc
+# clang -O2 -march=native -ffast-math -Rpass=loop-vectorize -Rpass-missed=loop-vectorize -Rpass-analysis=loop-vectorize
+
+### somavet_f32 (N = 1000000)
+warning: overriding the module target triple with x86_64-pc-linux-gnu [-Woverride-module]
+remark: <unknown>:0:0: loop not vectorized: cannot prove it is safe to reorder floating-point operations; allow reordering by specifying '#pragma clang loop vectorize(enable)' before the loop or by providing the compiler option '-ffast-math'. [-Rpass-analysis=loop-vectorize]
+remark: <unknown>:0:0: loop not vectorized [-Rpass-missed=loop-vectorize]
+1 warning generated.
+
+### prodesc_f32 (N = 1000000)
+warning: overriding the module target triple with x86_64-pc-linux-gnu [-Woverride-module]
+remark: <unknown>:0:0: loop not vectorized: cannot prove it is safe to reorder floating-point operations; allow reordering by specifying '#pragma clang loop vectorize(enable)' before the loop or by providing the compiler option '-ffast-math'. [-Rpass-analysis=loop-vectorize]
+remark: <unknown>:0:0: loop not vectorized [-Rpass-missed=loop-vectorize]
+1 warning generated.

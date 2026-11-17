@@ -1,0 +1,93 @@
+== Data (UTC) e modo ==
+2026-11-17 19:29:20  modo=completo
+
+== Sistema ==
+Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.43
+Linux DESKTOP-V6GOB25 6.18.33.2-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Thu Jun 18 21:54:43 UTC 2026 x86_64 GNU/Linux
+WSL2 (Hyper-V)
+
+== lscpu ==
+Architecture:                            x86_64
+CPU op-mode(s):                          32-bit, 64-bit
+Address sizes:                           39 bits physical, 48 bits virtual
+Byte Order:                              Little Endian
+CPU(s):                                  8
+On-line CPU(s) list:                     0-7
+Vendor ID:                               GenuineIntel
+Model name:                              Intel(R) Core(TM) i7-7700HQ CPU @ 2.80GHz
+CPU family:                              6
+Model:                                   158
+Thread(s) per core:                      2
+Core(s) per socket:                      4
+Socket(s):                               1
+Stepping:                                9
+BogoMIPS:                                5615.99
+Flags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss ht syscall nx pdpe1gb rdtscp lm arch_perfmon rep_good nopl xtopology cpuid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pdcm pcid sse4_1 sse4_2 movbe popcnt aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch pti ssbd ibrs ibpb stibp fsgsbase bmi1 avx2 smep bmi2 erms invpcid rdseed adx smap clflushopt xsaveopt xsavec xgetbv1 xsaves md_clear flush_l1d arch_capabilities
+Hypervisor vendor:                       Microsoft
+Virtualization type:                     full
+L1d cache:                               128 KiB (4 instances)
+L1i cache:                               128 KiB (4 instances)
+L2 cache:                                1 MiB (4 instances)
+L3 cache:                                6 MiB (1 instance)
+NUMA node(s):                            1
+NUMA node0 CPU(s):                       0-7
+
+== Memória ==
+MemTotal:        8064644 kB
+
+== Carga no início (/proc/loadavg) ==
+0.08 0.02 0.01 1/260 431
+
+== Ferramentas ==
+Ubuntu clang version 18.1.8 (20ubuntu8)
+Ubuntu LLVM version 18.1.8   Optimized build.
+mlir-translate: /usr/lib/llvm-18/bin/mlir-translate
+python 3.14.4
+
+== -march=native ==
+target-cpu: skylake
+extensões: +avx +sse4.2 +avx2 -avx512vl -avx512f +fma -avx512dq
+
+== OpenMP (C3) ==
+OMP_NUM_THREADS in (1, 2, 4, 8); OMP_PROC_BIND=spread; OMP_PLACES=cores; libomp de /usr/lib/llvm-18/lib
+
+== Configurações ==
+C0: linha de base: pipeline sem vetorização; clang -O0 sobre o IR do mlir-translate
+  mlir-opt --lower-affine --convert-scf-to-cf --convert-arith-to-llvm --finalize-memref-to-llvm --convert-func-to-llvm=use-bare-ptr-memref-call-conv=1 --convert-cf-to-llvm --reconcile-unrealized-casts
+  mlir-translate --mlir-to-llvmir
+  clang -O0 -march=native -c
+C1-escalar: clang -O2 com os vetorizadores do LLVM desligados (-fno-vectorize -fno-slp-vectorize): só otimização escalar
+  mlir-opt --lower-affine --convert-scf-to-cf --convert-arith-to-llvm --finalize-memref-to-llvm --convert-func-to-llvm=use-bare-ptr-memref-call-conv=1 --convert-cf-to-llvm --reconcile-unrealized-casts
+  mlir-translate --mlir-to-llvmir
+  clang -O2 -march=native -fno-vectorize -fno-slp-vectorize -c
+C1: clang -O2: otimização genérica e autovetorização do LLVM
+  mlir-opt --lower-affine --convert-scf-to-cf --convert-arith-to-llvm --finalize-memref-to-llvm --convert-func-to-llvm=use-bare-ptr-memref-call-conv=1 --convert-cf-to-llvm --reconcile-unrealized-casts
+  mlir-translate --mlir-to-llvmir
+  clang -O2 -march=native -Rpass=loop-vectorize -Rpass-missed=loop-vectorize -Rpass-analysis=loop-vectorize -c
+C2: affine-super-vectorize no MLIR (vetor virtual de 8); clang -O2 com os vetorizadores do LLVM desligados
+  mlir-opt '--affine-super-vectorize=virtual-vector-size=8 vectorize-reductions=true' --canonicalize --lower-affine --convert-vector-to-scf --convert-scf-to-cf --convert-vector-to-llvm --convert-arith-to-llvm --finalize-memref-to-llvm --convert-func-to-llvm=use-bare-ptr-memref-call-conv=1 --convert-cf-to-llvm --reconcile-unrealized-casts
+  mlir-translate --mlir-to-llvmir
+  clang -O2 -march=native -fno-vectorize -fno-slp-vectorize -Rpass=loop-vectorize -Rpass-missed=loop-vectorize -Rpass-analysis=loop-vectorize -c
+C3: affine-parallelize e convert-scf-to-openmp (libomp do LLVM 18); clang -O2
+  mlir-opt '--affine-parallelize=max-nested=1 parallel-reductions=true' --lower-affine --convert-scf-to-openmp --canonicalize --convert-scf-to-cf --convert-arith-to-llvm --finalize-memref-to-llvm --convert-func-to-llvm=use-bare-ptr-memref-call-conv=1 --convert-cf-to-llvm --convert-openmp-to-llvm --reconcile-unrealized-casts
+  mlir-translate --mlir-to-llvmir
+  clang -O2 -march=native -Rpass=loop-vectorize -Rpass-missed=loop-vectorize -Rpass-analysis=loop-vectorize -c
+C1-reassoc: C1 com fastmath<reassoc> na soma do núcleo MLIR (vira fadd reassoc no LLVM IR)
+  mlir-opt --lower-affine --convert-scf-to-cf --convert-arith-to-llvm --finalize-memref-to-llvm --convert-func-to-llvm=use-bare-ptr-memref-call-conv=1 --convert-cf-to-llvm --reconcile-unrealized-casts
+  mlir-translate --mlir-to-llvmir
+  clang -O2 -march=native -Rpass=loop-vectorize -Rpass-missed=loop-vectorize -Rpass-analysis=loop-vectorize -c
+C1-ffast-math: C1 com -ffast-math no clang, sobre o mesmo .ll sem reassoc
+  mlir-opt --lower-affine --convert-scf-to-cf --convert-arith-to-llvm --finalize-memref-to-llvm --convert-func-to-llvm=use-bare-ptr-memref-call-conv=1 --convert-cf-to-llvm --reconcile-unrealized-casts
+  mlir-translate --mlir-to-llvmir
+  clang -O2 -march=native -ffast-math -Rpass=loop-vectorize -Rpass-missed=loop-vectorize -Rpass-analysis=loop-vectorize -c
+C1-ordenada: C1 autorizando o LLVM a vetorizar a redução sem reassociar (-mllvm -force-ordered-reductions)
+  mlir-opt --lower-affine --convert-scf-to-cf --convert-arith-to-llvm --finalize-memref-to-llvm --convert-func-to-llvm=use-bare-ptr-memref-call-conv=1 --convert-cf-to-llvm --reconcile-unrealized-casts
+  mlir-translate --mlir-to-llvmir
+  clang -O2 -march=native -mllvm -force-ordered-reductions -Rpass=loop-vectorize -Rpass-missed=loop-vectorize -Rpass-analysis=loop-vectorize -c
+C-O2: a mesma redução escrita em C (referencia_c.c), clang -O2 -ffp-contract=off
+  clang -O2 -march=native -ffp-contract=off -Rpass=loop-vectorize -Rpass-missed=loop-vectorize -Rpass-analysis=loop-vectorize -c
+C-ffast-math: a mesma redução escrita em C, clang -O2 -ffast-math
+  clang -O2 -march=native -ffast-math -Rpass=loop-vectorize -Rpass-missed=loop-vectorize -Rpass-analysis=loop-vectorize -c
+
+== Carga no fim (/proc/loadavg) ==
+0.80
