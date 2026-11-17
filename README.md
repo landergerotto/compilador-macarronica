@@ -7,9 +7,16 @@ tipos, escopos, chamadas e retornos.
 
 A etapa PjBL 3 gera LLVM IR textual diretamente da AST semanticamente
 validada, com runtime C separado. O pipeline é fonte → lexer → parser/AST →
-semântica → LLVM IR → ferramentas LLVM → execução no hospedeiro. A rota da
-ESP32 (PjBL 4, parte D) reutiliza a AST validada para gerar C99 e firmware
-ESP-IDF. MLIR, DSL vetorial e benchmarks ficam fora desta etapa.
+semântica → LLVM IR → ferramentas LLVM → execução no hospedeiro.
+
+O PjBL 4 acrescenta:
+
+- a DSL vetorial (Parte A, [`docs/dsl.md`](docs/dsl.md));
+- a saída MLIR dos núcleos da DSL (Parte B);
+- o estudo de otimização com `make bench` e `Dockerfile` (Parte C,
+  [`docs/relatorio_otimizacao.md`](docs/relatorio_otimizacao.md));
+- a rota da ESP32 (Parte D, [`docs/placa.md`](docs/placa.md)), que reutiliza
+  a AST validada para gerar C99 e firmware.
 
 ## Requisitos
 
@@ -75,6 +82,10 @@ make debug
 | `make test` | `mingw32-make test` | Compila e executa todos os testes: PjBL 1, LLVM IR (exige LLVM 18), rota C e os testes de `mk/*.mk` |
 | `make test-frontend` | `mingw32-make test-frontend` | Executa somente a regressão do front-end, sem exigir LLVM |
 | `make test-c` | `mingw32-make test-c` | Executa a rota C da placa (`--alvo=esp32`) no PC, com o runtime POSIX |
+| `make test-qa` | `mingw32-make test-qa` | Programas diferenciais de `tests/qa/`: a mesma saída no lli, no clang e nas rotas C (ESP32 e PC) |
+| `make dsl-teste` | `mingw32-make dsl-teste` | Partes A e B: recusas E-DSL, rota C99 e, com MLIR 18, o `.mlir` descido e ligado ao `.ll` |
+| `make bench` | — | Parte C: estudo completo de otimização; grava `docs/bench/` (só Linux/WSL ou o `Dockerfile`) |
+| `make placa-testar PORT=COM4` | `mingw32-make placa-testar PORT=COM4` | Parte D: grava cada `tests/placa/*.mac` na ESP32 e compara a serial com o `.esperado` |
 | `make sanitize` | `mingw32-make sanitize` | Executa os testes com AddressSanitizer e UndefinedBehaviorSanitizer, quando disponíveis |
 | `make clean` | `mingw32-make clean` | Remove o diretório `build/` |
 
@@ -197,16 +208,20 @@ de resolução do CRT no runtime em bitcode. O modo POSIX usa `llvm-link` e
 `lli` sobre os módulos ligados. Os comandos manuais Windows estão em
 [`docs/decisoes_backend.md`](docs/decisoes_backend.md).
 
-Versões usadas nesta validação: GCC 16.2.0, LLVM/Clang 22.1.8, Windows x86_64
-com MSYS2 UCRT64. As versões indicam o ambiente testado; LLVM 15+ é o mínimo
-do formato de IR com `ptr`, não uma afirmação de teste de cada versão.
-A suíte PjBL 1/3 passou 119/119 verificações, incluindo 82 regressões do
-front-end, onze programas positivos, sete falhas de execução, entrada com
-NUL e análise de otimizações. A rota C acrescenta 21/21 verificações, também
-executadas por make test. A execução em Linux ainda não foi realizada
-neste ambiente; o runner mantém o fluxo POSIX por bitcode.
+Validação de 17/11/2026: WSL (Ubuntu), com GCC e LLVM/Clang/MLIR 18.1.8 em
+`/usr/lib/llvm-18/bin`, que o Makefile detecta sozinho.
 
-Os tipos são `bool → i1`, `inteira → i32`, `flut → float`,
+- O `make test` passou 152/152 verificações do PjBL 1/3: front-end, programas
+  positivos, falhas de execução, entrada com NUL e SSA.
+- A rota C passou 25/25.
+- O `make dsl-teste` e o `make bench-teste` passaram.
+- O `make test-qa` passou 77/77 programas diferenciais.
+
+Antes, a suíte já tinha sido validada no Windows (MSYS2 UCRT64, GCC 16.2.0,
+LLVM/Clang 22.1.8). LLVM 15+ é o mínimo do formato de IR com `ptr`, não uma
+afirmação de teste de cada versão.
+
+Os tipos são `bool → i1`, `inteira → i64`, `flut → float`,
 `duplocarpado → double`, `palavra → ptr`, registros nominais e vetores de
 comprimento fixo. As promoções numéricas autorizadas geram `sitofp`/`fpext`;
 a fonte não tem casts. `E`/`OU` usam curto-circuito, `XOR` avalia ambos os
@@ -323,3 +338,6 @@ qualquer trecho da implementação.
 | [`docs/diagnosticos.md`](docs/diagnosticos.md) | Catálogo dos códigos de erro léxico, sintático e semântico. |
 | [`docs/plano-pjbl3-4.md`](docs/plano-pjbl3-4.md) | Situação, pendências e cronograma do PjBL 3 e 4 até 17/11. |
 | [`docs/fluxo-git.md`](docs/fluxo-git.md) | Fluxo de branches do grupo (`develop` e `main`). |
+| [`docs/dsl.md`](docs/dsl.md) | Partes A e B: sintaxe, tipos e erros E-DSL da DSL vetorial e os núcleos MLIR. |
+| [`docs/relatorio_otimizacao.md`](docs/relatorio_otimizacao.md) | Partes B e C: rebaixamento MLIR e estudo de otimização, com os números de [`docs/bench/resultados.md`](docs/bench/resultados.md). |
+| [`docs/placa.md`](docs/placa.md) | Parte D: placa ESP32, ferramentas, decisões do alvo e evidências dos 8 programas. |

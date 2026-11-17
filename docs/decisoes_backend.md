@@ -14,7 +14,7 @@ Não existe uma representação intermediária própria de três endereços.
 | O que é `respost` em `principal`? | Código de saída do processo, reduzido a 32 bits; `vazio principal` sai com 0 | Entrada e retorno |
 | Divisão por zero, overflow inteiro, vetor fora dos limites | Divisão e índice são verificados antes da operação e abortam com status de falha e `linha N: erro de execucao C` na saída de erro (na placa, mensagem na serial e LED piscando). `+`, `-`, `*` e `^` em `inteira` são módulo 2^64, sem comportamento indefinido | Validação e execução |
 | Formato de impressão | `inteira` em decimal; `flut` com `%.9g`; `duplocarpado` com `%.17g`; `bool` como `VER`/`FAL`; só `imprimeNl` quebra a linha | Validação e execução |
-| Largura dos tipos e `duplocarpado` sem `double` de 64 bits | `inteira` é i64 e `duplocarpado` é binary64 em qualquer alvo. Na ESP32, cuja FPU só faz 32 bits, o `double` roda em software (libgcc) e nunca vira `float`. Não há alvo AVR; num alvo sem `double` de 64 bits, a regra seria recusar `duplocarpado` no alvo, como já se recusa pino inválido (E-TGT-001) e falta de RAM (E-TGT-002) | Tipos e portabilidade; Rota C para ESP32 |
+| Largura dos tipos e `duplocarpado` sem `double` de 64 bits | `inteira` é i64 e `duplocarpado` é binary64 em qualquer alvo. Na ESP32, cuja FPU só faz 32 bits, o `double` roda em software (libgcc) e nunca vira `float`. Não há alvo AVR; num alvo sem `double` de 64 bits, a regra seria recusar `duplocarpado` no alvo, como já se recusam GPIO fora da placa (E-TGT-001) e falta de RAM (E-TGT-002); pino inválido é o erro de execução 8 | Tipos e portabilidade; Rota C para ESP32 |
 
 ## Tipos e portabilidade
 
