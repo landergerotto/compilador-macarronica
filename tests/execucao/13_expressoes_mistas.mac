@@ -1,0 +1,39 @@
+outrafuncao duplocarpado media(inteira soma, inteira quantidade) @
+[
+    respost soma / quantidade;
+]
+
+inteira principal() @
+[
+    inteira i;
+    flut f;
+    duplocarpado d;
+    i receba 3;
+    f receba 1.5;
+    d receba 0.25;
+    imprimeFlut(f + 1);
+    imprimeNl();
+    imprimeFlut(i * f - 2);
+    imprimeNl();
+    imprimeDuplocarpado(d + f);
+    imprimeNl();
+    imprimeDuplocarpado(i + f * d);
+    imprimeNl();
+    imprimeDuplocarpado(media(7, 2));
+    imprimeNl();
+    imprimeBool(i > f);
+    imprimeNl();
+    imprimeBool(f * 2 == i);
+    imprimeNl();
+    imprimeBool(d ! 1);
+    imprimeNl();
+    cond (i + 0.5 > 3) edai
+    [
+        imprimePalavra("condicao mista");
+        imprimeNl();
+    ]
+    f receba i + 0.5;
+    imprimeFlut(f);
+    imprimeNl();
+    respost 0;
+]

@@ -108,11 +108,16 @@ else
     sed 's/^/       /' "$temporary_dir/rounding-build.err" >&2
 fi
 
+# run_source_case CAMINHO aceito|rejeitado FASE [ERROS]
+# ERROS e a quantidade exata de diagnosticos de erro esperada (padrao 1 para
+# rejeitado). Conferir a quantidade, e nao so a existencia, e o que pega
+# erros em cascata: um erro real deve gerar um diagnostico (D-018).
 run_source_case()
 {
     relative_path=$1
     expectation=$2
     expected_phase=$3
+    expected_errors=${4:-1}
     source_path="$test_root/$relative_path"
     stdout_file="$temporary_dir/stdout.txt"
     stderr_file="$temporary_dir/stderr.txt"
@@ -152,13 +157,21 @@ run_source_case()
         sed 's/^/       /' "$stderr_file" >&2
         return
     fi
+    error_count=$(grep -Ec ': (lexico|sintatico|semantico) E-' "$stderr_file")
+    if [ "$error_count" -ne "$expected_errors" ]; then
+        record_failure "$relative_path" \
+            "esperava $expected_errors diagnostico(s) de erro, recebeu $error_count"
+        sed 's/^/       /' "$stderr_file" >&2
+        return
+    fi
     record_pass "$relative_path"
 }
 
-while IFS="$(printf '\t')" read -r relative_path expectation phase category; do
+# Colunas do manifesto: arquivo, esperado, fase, erros, categoria.
+while IFS="$(printf '\t')" read -r relative_path expectation phase errors category; do
     [ "$relative_path" = arquivo ] && continue
     [ -z "$relative_path" ] && continue
-    run_source_case "$relative_path" "$expectation" "$phase"
+    run_source_case "$relative_path" "$expectation" "$phase" "$errors"
 done < "$test_root/manifest.tsv"
 
 run_source_case 'integration/valido_minimo.mac' aceito '-'
@@ -295,6 +308,30 @@ if [ "$status" -eq 3 ]; then
     record_pass 'CLI arquivo ausente'
 else
     record_failure 'CLI arquivo ausente' "esperava codigo 3, recebeu $status"
+fi
+
+# Regressao: no Windows o tmpfile() do msvcrt criava o temporario na raiz do
+# drive do diretorio atual (C:\ sem permissao de escrita) e a compilacao
+# falhava fora do D:. Compila a partir de / e confere que nada sobra ao lado.
+(cd / && run_compiler "$project_root/tests/professor/nivel1_soma.mcn" \
+    -o "$temporary_dir/outro-cwd.ll") >"$temporary_dir/outro-cwd.txt" 2>"$temporary_dir/outro-cwd.err"
+status=$?
+if [ "$status" -eq 0 ] && [ -s "$temporary_dir/outro-cwd.ll" ] && [ ! -e "$temporary_dir/outro-cwd.ll.tmp" ]; then
+    record_pass 'CLI compila a partir de outro diretorio'
+else
+    record_failure 'CLI compila a partir de outro diretorio' "codigo $status: $(head -n 1 "$temporary_dir/outro-cwd.err")"
+fi
+
+# Erro de fonte nao pode destruir uma saida que ja existia nem deixar .tmp.
+printf 'saida anterior\n' >"$temporary_dir/preserva.ll"
+run_compiler "$project_root/tests/invalidos/lexico_igual_isolado.mac" -o "$temporary_dir/preserva.ll" \
+    >"$temporary_dir/preserva.txt" 2>"$temporary_dir/preserva.err"
+status=$?
+if [ "$status" -eq 1 ] && [ "$(cat "$temporary_dir/preserva.ll")" = 'saida anterior' ] \
+    && [ ! -e "$temporary_dir/preserva.ll.tmp" ]; then
+    record_pass 'CLI erro de fonte preserva saida existente'
+else
+    record_failure 'CLI erro de fonte preserva saida existente' "codigo $status"
 fi
 
 if [ "$test_scope" != frontend ]; then

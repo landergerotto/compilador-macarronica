@@ -17,6 +17,19 @@ typedef struct {
     size_t expression_depth;
     size_t block_depth;
     int allocation_failed;
+    /* Modo panico (recuperacao de erros): ligado pelo primeiro erro sintatico
+     * de um comando e desligado quando o parser sincroniza (ver synchronize).
+     * Enquanto ligado, syntax_error nao relata nada: os erros seguintes do
+     * mesmo comando sao consequencia do primeiro (cascata). */
+    int panic_mode;
+    /* Saldo de colchetes do arquivo inteiro: quantidade de '[' menos a de ']'.
+     * Negativo: falta algum '[' (ou sobra um ']'). Positivo: falta algum ']'
+     * (ou sobra um '['). Decide recuperacoes que, sem essa informacao, seriam
+     * um chute: supor um '[' esquecido, descartar um '[' solto, fechar um ramo
+     * de cond antes do 'casocontrario'. Cada suposicao corrige o saldo. */
+    long bracket_balance;
+    /* Quantos blocos de ramos de cond estao abertos agora. */
+    size_t open_cond_blocks;
     Token synthetic_eof;
 } Parser;
 
@@ -71,12 +84,19 @@ static SourceSpan span_nodes(const AstNode *left, const AstNode *right)
     return span_from(left->span.start, right->span.end);
 }
 
-static SourcePosition last_end(const Parser *parser, SourcePosition fallback)
+/* Ultimo token consumido, ou NULL no inicio do arquivo. */
+static const Token *previous_token(const Parser *parser)
 {
     if (parser->current > 0U && parser->current - 1U < parser->tokens->count) {
-        return parser->tokens->items[parser->current - 1U].span.end;
+        return &parser->tokens->items[parser->current - 1U];
     }
-    return fallback;
+    return NULL;
+}
+
+static SourcePosition last_end(const Parser *parser, SourcePosition fallback)
+{
+    const Token *previous = previous_token(parser);
+    return previous != NULL ? previous->span.end : fallback;
 }
 
 static char *copy_token_text(Parser *parser, const Token *token)
@@ -141,6 +161,12 @@ static void syntax_error(Parser *parser, const Token *token,
                          const char *code, const char *message)
 {
     int added;
+    /* Um diagnostico por erro real: em modo panico o erro e consequencia de
+     * outro ja relatado no mesmo comando. */
+    if (parser->panic_mode) {
+        return;
+    }
+    parser->panic_mode = 1;
     if (token->start != NULL && token->length != 0U) {
         size_t shown = token->length > (size_t)INT_MAX ? (size_t)INT_MAX : token->length;
         added = diagnostic_bag_add(parser->diagnostics, parser->source, token->span,
@@ -204,11 +230,6 @@ static AstNode *new_node(Parser *parser, AstKind kind, SourceSpan span)
         out_of_memory(parser);
         return NULL;
     }
-#if MACARONICA_PARSER_DEBUG
-    (void)fprintf(stderr, "[debug][parser] no %zu: %s em %zu:%zu\n", // debug - remover
-                  node->node_id, ast_kind_name(kind),
-                  span.start.line, span.start.column);
-#endif
     return node;
 }
 
@@ -335,8 +356,9 @@ static AstNode *parse_primary(Parser *parser)
         (void)expect(parser, TOKEN_RIGHT_PAREN, "esperado ')' apos expressao");
         return node;
     }
+    /* O token errado nao e consumido: se for ')', ';' ou ']', ele ainda fecha
+     * a construcao de fora, e a sincronizacao do comando cuida do resto. */
     syntax_error(parser, token, "E-SIN-001", "esperada expressao");
-    if (!check(parser, TOKEN_EOF)) (void)advance(parser);
     return NULL;
 }
 
@@ -581,6 +603,19 @@ static int parse_type(Parser *parser, int allow_void, AstTypeRef *out)
     return 1;
 }
 
+/* Ha um '}' adiante antes do fim do comando? Decide se vale pular uma
+ * expressao usada como tamanho de vetor ate o '}' que a fecha. */
+static int closing_brace_ahead(const Parser *parser)
+{
+    size_t distance;
+    for (distance = 0U;; ++distance) {
+        TokenKind kind = peek_at(parser, distance)->kind;
+        if (kind == TOKEN_RIGHT_BRACE) return 1;
+        if (kind == TOKEN_SEMICOLON || kind == TOKEN_LEFT_BRACKET ||
+            kind == TOKEN_RIGHT_BRACKET || kind == TOKEN_EOF) return 0;
+    }
+}
+
 static int append_declared_token(Parser *parser, AstDeclaredNameList *list, const Token *token)
 {
     char *name = copy_token_text(parser, token);
@@ -599,18 +634,35 @@ static AstNode *parse_declaration_after_type(Parser *parser, AstTypeRef *type,
     long long vector_size = 0;
     SourceSpan size_span = type->span;
     const Token *name;
+    /* Ultimo nome aceito. `name` vira NULL quando falta o nome depois de uma
+     * virgula (`inteira a, ;`); o fim do no usa `last_name`, nunca `name`. */
+    const Token *last_name;
     AstNode *node;
 
     if (!field_or_parameter && match(parser, TOKEN_KW_VET)) {
-        const Token *size_token;
         is_vector = 1;
         (void)expect(parser, TOKEN_LEFT_BRACE, "esperado '{' antes do tamanho do vetor");
-        size_token = expect(parser, TOKEN_LITERAL_INTEGER, "esperado literal inteiro como tamanho do vetor");
-        if (size_token != NULL) { vector_size = size_token->literal.inteira; size_span = size_token->span; }
+        if (check(parser, TOKEN_LITERAL_INTEGER)) {
+            const Token *size_token = advance(parser);
+            vector_size = size_token->literal.inteira;
+            size_span = size_token->span;
+        } else {
+            syntax_error(parser, current_token(parser), "E-SIN-002",
+                         "esperado literal inteiro como tamanho do vetor");
+        }
+        if (!check(parser, TOKEN_RIGHT_BRACE) && closing_brace_ahead(parser)) {
+            /* Expressao no lugar do literal (`vet{n}`, `vet{2 + 1}`): o tamanho
+             * e fixo, conhecido na compilacao. Um so erro; o resto ate '}' e
+             * pulado e a declaracao continua no nome do vetor. */
+            syntax_error(parser, current_token(parser), "E-SIN-002",
+                         "o tamanho do vetor deve ser um unico literal inteiro");
+            while (!check(parser, TOKEN_RIGHT_BRACE)) (void)advance(parser);
+        }
         (void)expect(parser, TOKEN_RIGHT_BRACE, "esperado '}' apos tamanho do vetor");
     }
     name = expect(parser, TOKEN_IDENTIFIER, "esperado nome na declaracao");
     if (name == NULL) { ast_type_ref_destroy(type); return NULL; }
+    last_name = name;
     node = new_node(parser, is_vector ? AST_VECTOR_DECL : AST_VAR_DECL,
                     span_from(start, name->span.end));
     if (node == NULL) { ast_type_ref_destroy(type); return NULL; }
@@ -631,8 +683,15 @@ static AstNode *parse_declaration_after_type(Parser *parser, AstTypeRef *type,
     }
     if (!field_or_parameter) {
         while (match(parser, TOKEN_COMMA)) {
+            if (check(parser, TOKEN_KW_VET)) {
+                /* Cada declaracao e so de vetores ou so de variaveis simples. */
+                syntax_error(parser, current_token(parser), "E-SIN-002",
+                             "'vet' nao pode vir depois de ','; declare o vetor em outra declaracao");
+                break;
+            }
             name = expect(parser, TOKEN_IDENTIFIER, "esperado nome apos ','");
             if (name == NULL) break;
+            last_name = name;
             if (is_vector) {
                 if (!append_declared_token(parser, &node->as.vector_decl.names, name)) { ast_node_destroy(node); return NULL; }
             } else if (!append_declared_token(parser, &node->as.var_decl.names, name)) {
@@ -643,7 +702,7 @@ static AstNode *parse_declaration_after_type(Parser *parser, AstTypeRef *type,
     if (consume_semicolon) {
         (void)expect(parser, TOKEN_SEMICOLON, "esperado ';' apos declaracao");
     }
-    node->span.end = last_end(parser, name->span.end);
+    node->span.end = last_end(parser, last_name->span.end);
     return node;
 }
 
@@ -695,15 +754,51 @@ static AstNode *parse_assignment_no_semicolon(Parser *parser)
     return node;
 }
 
+/*
+ * Recuperacao local dentro de um cabecalho entre parenteses (condicao de cond
+ * e durante, cabecalho de repete, parametros de funcao): pula ate o ')' que
+ * fecha o cabecalho, inclusive, e para antes de 'edai', '@', '[' ou ']'. Assim
+ * o corpo ainda e analisado. Nao para em ';': `repete (i receba 0; ...)` e um
+ * erro comum de quem vem do C, e esse ';' nao encerra o comando.
+ */
+static void skip_to_header_end(Parser *parser)
+{
+    size_t depth = 0U;
+    for (;;) {
+        TokenKind kind = current_token(parser)->kind;
+        if (kind == TOKEN_EOF || kind == TOKEN_KW_EDAI || kind == TOKEN_AT ||
+            kind == TOKEN_LEFT_BRACKET || kind == TOKEN_RIGHT_BRACKET) {
+            return;
+        }
+        (void)advance(parser);
+        if (kind == TOKEN_LEFT_PAREN) {
+            ++depth;
+        } else if (kind == TOKEN_RIGHT_PAREN) {
+            if (depth == 0U) return;
+            --depth;
+        }
+    }
+}
+
+/* Fecha um cabecalho: sem erro nele e com ')', termina ali. Com erro antes,
+ * ou sem o ')' agora (erro relatado por expect), pula o resto ate o ')'. Isso
+ * cobre `soma(inteira a a, inteira b)`: o 'a' repetido e o erro, e os
+ * parametros seguintes nao viram declaracoes globais. */
+static void close_header(Parser *parser, const char *message)
+{
+    if (!parser->panic_mode && expect(parser, TOKEN_RIGHT_PAREN, message) != NULL) return;
+    skip_to_header_end(parser);
+}
+
 static AstNode *parse_return(Parser *parser)
 {
     const Token *start = advance(parser);
-    AstNode *value = NULL;
+    int has_value = !check(parser, TOKEN_SEMICOLON);
+    AstNode *value = has_value ? parse_expression(parser) : NULL;
     AstNode *node;
-    if (!check(parser, TOKEN_SEMICOLON)) value = parse_expression(parser);
     (void)expect(parser, TOKEN_SEMICOLON, "esperado ';' apos respost");
-    if (value == NULL && !check(parser, TOKEN_SEMICOLON) &&
-        parser->allocation_failed) return NULL;
+    /* Valor com erro: sem no, para nao virar um `respost;` sem valor. */
+    if (has_value && value == NULL) return NULL;
     node = new_node(parser, AST_RETURN_STMT,
                     span_from(start->span.start, last_end(parser, start->span.end)));
     if (node == NULL) { ast_node_destroy(value); return NULL; }
@@ -719,7 +814,7 @@ static AstNode *parse_while(Parser *parser)
     AstNode *node;
     (void)expect(parser, TOKEN_LEFT_PAREN, "esperado '(' apos durante");
     condition = parse_expression(parser);
-    (void)expect(parser, TOKEN_RIGHT_PAREN, "esperado ')' apos condicao de durante");
+    close_header(parser, "esperado ')' apos condicao de durante");
     (void)expect(parser, TOKEN_KW_EDAI, "esperado 'edai' apos durante");
     body = parse_block(parser);
     if (condition == NULL || body == NULL) { ast_node_destroy(condition); ast_node_destroy(body); return NULL; }
@@ -744,7 +839,7 @@ static AstNode *parse_for(Parser *parser)
     condition = parse_expression(parser);
     (void)expect(parser, TOKEN_COMMA, "esperado ',' apos condicao de repete");
     iteration = parse_assignment_no_semicolon(parser);
-    (void)expect(parser, TOKEN_RIGHT_PAREN, "esperado ')' apos cabecalho de repete");
+    close_header(parser, "esperado ')' apos cabecalho de repete");
     (void)expect(parser, TOKEN_KW_EDAI, "esperado 'edai' apos repete");
     body = parse_block(parser);
     if (initializer == NULL || condition == NULL || iteration == NULL || body == NULL) {
@@ -774,45 +869,61 @@ static int append_if_branch(Parser *parser, AstNode *node,
     return 1;
 }
 
+/*
+ * cond ( c ) edai [ ... ] { casocontrario cond ( c ) edai [ ... ] }
+ *                          [ casocontrario edai [ ... ] ]
+ * A cadeia e lida ate o fim mesmo que um ramo falhe: se o parser parasse no
+ * primeiro erro, cada 'casocontrario' seguinte viraria um erro solto (cascata).
+ */
 static AstNode *parse_if(Parser *parser)
 {
     const Token *start_token = advance(parser);
     AstNode *node = new_node(parser, AST_IF_STMT, start_token->span);
-    AstNode *condition;
-    AstNode *body;
-    if (node == NULL) return NULL;
-    (void)expect(parser, TOKEN_LEFT_PAREN, "esperado '(' apos cond");
-    condition = parse_expression(parser);
-    (void)expect(parser, TOKEN_RIGHT_PAREN, "esperado ')' apos condicao");
-    (void)expect(parser, TOKEN_KW_EDAI, "esperado 'edai' apos condicao");
-    body = parse_block(parser);
-    if (condition == NULL || body == NULL ||
-        !append_if_branch(parser, node, condition, body, start_token->span.start)) {
-        if (condition == NULL || body == NULL) { ast_node_destroy(condition); ast_node_destroy(body); }
-        ast_node_destroy(node); return NULL;
-    }
-    while (match(parser, TOKEN_KW_CASOCONTRARIO)) {
-        SourcePosition branch_start = parser->tokens->items[parser->current - 1U].span.start;
-        if (!match(parser, TOKEN_KW_COND)) {
-            (void)expect(parser, TOKEN_KW_EDAI, "esperado 'edai' apos casocontrario");
-            node->as.if_stmt.else_body = parse_block(parser);
-            if (node->as.if_stmt.else_body == NULL) { ast_node_destroy(node); return NULL; }
-            if (check(parser, TOKEN_KW_CASOCONTRARIO)) {
-                syntax_error(parser, current_token(parser), "E-SIN-007",
-                             "casocontrario final deve encerrar a cadeia");
-            }
-            break;
-        }
-        (void)expect(parser, TOKEN_LEFT_PAREN, "esperado '(' apos casocontrario cond");
+    SourcePosition branch_start = start_token->span.start;
+    int first_branch = 1;
+    int failed = node == NULL;
+    for (;;) {
+        AstNode *condition;
+        AstNode *body;
+        (void)expect(parser, TOKEN_LEFT_PAREN, first_branch ? "esperado '(' apos cond"
+                                                            : "esperado '(' apos casocontrario cond");
         condition = parse_expression(parser);
-        (void)expect(parser, TOKEN_RIGHT_PAREN, "esperado ')' apos condicao");
+        close_header(parser, "esperado ')' apos condicao");
         (void)expect(parser, TOKEN_KW_EDAI, "esperado 'edai' apos condicao");
+        ++parser->open_cond_blocks; /* ver missing_bracket_before_else */
         body = parse_block(parser);
-        if (condition == NULL || body == NULL ||
-            !append_if_branch(parser, node, condition, body, branch_start)) {
-            if (condition == NULL || body == NULL) { ast_node_destroy(condition); ast_node_destroy(body); }
-            ast_node_destroy(node); return NULL;
+        --parser->open_cond_blocks;
+        if (failed || condition == NULL || body == NULL) {
+            ast_node_destroy(condition);
+            ast_node_destroy(body);
+            failed = 1;
+        } else if (!append_if_branch(parser, node, condition, body, branch_start)) {
+            failed = 1; /* append_if_branch ja liberou condicao e corpo */
         }
+        if (!match(parser, TOKEN_KW_CASOCONTRARIO)) break;
+        branch_start = previous_token(parser)->span.start;
+        first_branch = 0;
+        if (match(parser, TOKEN_KW_COND)) continue;
+        /* casocontrario final, sem condicao */
+        (void)expect(parser, TOKEN_KW_EDAI, "esperado 'edai' apos casocontrario");
+        ++parser->open_cond_blocks;
+        body = parse_block(parser);
+        --parser->open_cond_blocks;
+        if (failed || body == NULL) {
+            ast_node_destroy(body);
+            failed = 1;
+        } else {
+            node->as.if_stmt.else_body = body;
+        }
+        if (check(parser, TOKEN_KW_CASOCONTRARIO)) {
+            syntax_error(parser, current_token(parser), "E-SIN-007",
+                         "casocontrario final deve encerrar a cadeia");
+        }
+        break;
+    }
+    if (failed) {
+        ast_node_destroy(node);
+        return NULL;
     }
     node->span.end = node->as.if_stmt.else_body != NULL
                          ? node->as.if_stmt.else_body->span.end
@@ -853,10 +964,6 @@ static int looks_like_local_declaration(const Parser *parser)
 
 static AstNode *parse_statement(Parser *parser)
 {
-#if MACARONICA_PARSER_DEBUG
-    (void)fprintf(stderr, "[debug][parser] comando inicia com %s\n", // debug - remover
-                  token_kind_name(current_token(parser)->kind));
-#endif
     if (looks_like_local_declaration(parser)) return parse_value_declaration(parser, 0);
     if (check(parser, TOKEN_IDENTIFIER)) return parse_identifier_statement(parser);
     if (check(parser, TOKEN_KW_REPETE)) return parse_for(parser);
@@ -872,29 +979,167 @@ static AstNode *parse_statement(Parser *parser)
     } else {
         syntax_error(parser, current_token(parser), "E-SIN-001", "esperado comando");
     }
-    if (!check(parser, TOKEN_EOF) && !check(parser, TOKEN_RIGHT_BRACKET)) (void)advance(parser);
+    /* Nao consome: a sincronizacao do bloco pula o token, ou o bloco
+     * '[ ... ]' inteiro quando o comando errado comeca em '['. */
     return NULL;
 }
 
-static int is_statement_start(const Parser *parser)
+/*
+ * Recuperacao de erros: modo panico com sincronizacao.
+ *
+ * O primeiro erro de um comando liga parser->panic_mode e os seguintes deixam
+ * de ser relatados (ver syntax_error). Os lacos que leem sequencias (comandos
+ * de um bloco, campos de um registro, declaracoes globais) chamam synchronize
+ * depois de um item com erro: ela descarta tokens ate um ponto seguro e
+ * desliga o modo panico. Pontos seguros:
+ *   - logo depois de ';' ou de um bloco '[ ... ]' completo (fim de comando);
+ *   - antes de ']' (fecha o bloco que contem o comando) e do fim do arquivo;
+ *   - antes de uma palavra que so pode comecar comando ou declaracao;
+ *   - antes de um identificador que abre uma linha nova com cara de comando,
+ *     o que cobre o ';' esquecido no fim da linha anterior.
+ * Um bloco '[ ... ]' encontrado no caminho e pulado inteiro (e os
+ * 'casocontrario' que o seguem), para que o ']' dele nao feche o bloco de fora.
+ * Assim `b receba 2 2;`, `inteira vet{n} v;` e `inteira a, 5;` geram um erro
+ * cada, e os comandos seguintes continuam sendo analisados.
+ */
+
+/* Palavra que so pode comecar um comando (global_level = 0) ou uma
+ * declaracao global (global_level = 1). Identificadores ficam de fora: no
+ * meio de uma linha eles costumam ser o resto do comando com erro. */
+static int is_sync_keyword(TokenKind kind, int global_level)
+{
+    if (is_native_value_type(kind) || kind == TOKEN_KW_VAZIO ||
+        kind == TOKEN_KW_REGISTRO || kind == TOKEN_KW_OUTRAFUNCAO) {
+        return 1;
+    }
+    if (global_level) return kind == TOKEN_KW_FUNC;
+    return kind == TOKEN_KW_REPETE || kind == TOKEN_KW_DURANTE ||
+           kind == TOKEN_KW_COND || kind == TOKEN_KW_RESPOST;
+}
+
+/* Identificador no inicio de uma linha seguido do que so o inicio de um
+ * comando teria (`x receba`, `f(`, `v{`, `r.campo`, `Tipo nome`) ou, no nivel
+ * global, de uma declaracao de tipo registro (`Tipo nome`, `Tipo principal`). */
+static int identifier_starts_line(const Parser *parser, int global_level)
+{
+    const Token *token = current_token(parser);
+    const Token *previous = previous_token(parser);
+    TokenKind next = peek_at(parser, 1U)->kind;
+    if (token->kind != TOKEN_IDENTIFIER || previous == NULL ||
+        token->span.start.line <= previous->span.end.line) {
+        return 0;
+    }
+    if (next == TOKEN_IDENTIFIER || next == TOKEN_KW_PRINCIPAL || next == TOKEN_KW_VET) {
+        return 1;
+    }
+    return !global_level && (next == TOKEN_KW_RECEBA || next == TOKEN_LEFT_PAREN ||
+                             next == TOKEN_LEFT_BRACE || next == TOKEN_DOT);
+}
+
+/* Pula um bloco '[ ... ]' inteiro, com os aninhados. E iterativo: um
+ * aninhamento enorme nao estoura a pilha. Comeca com o token atual em '['. */
+static void skip_bracketed_block(Parser *parser)
+{
+    size_t depth = 0U;
+    while (!check(parser, TOKEN_EOF)) {
+        TokenKind kind = advance(parser)->kind;
+        if (kind == TOKEN_LEFT_BRACKET) {
+            ++depth;
+        } else if (kind == TOKEN_RIGHT_BRACKET && depth > 0U && --depth == 0U) {
+            return;
+        }
+    }
+}
+
+/* 'casocontrario' no inicio de um comando, dentro do bloco de um ramo de cond,
+ * com ']' faltando no arquivo: o ']' do ramo foi esquecido. O bloco termina
+ * ali (com um erro) e o cond continua no 'casocontrario'. */
+static int missing_bracket_before_else(const Parser *parser)
+{
+    return check(parser, TOKEN_KW_CASOCONTRARIO) && parser->open_cond_blocks > 0U &&
+           parser->bracket_balance > 0;
+}
+
+static void synchronize(Parser *parser, size_t failed_at, int global_level)
+{
+    /* Um item que falhou sem consumir nada perde ao menos um token (ou o
+     * bloco que comeca nele): garante que o laco de fora sempre avanca. */
+    int progressed = parser->current != failed_at;
+    for (;;) {
+        const Token *previous = previous_token(parser);
+        TokenKind kind = current_token(parser)->kind;
+        if (kind == TOKEN_EOF || (kind == TOKEN_RIGHT_BRACKET && !global_level)) break;
+        if (progressed && !global_level) {
+            /* Fim de comando. No nivel global estas regras nao valem: la, ';'
+             * e ']' costumam encerrar comandos soltos (depois de um ']' a
+             * mais), e parar neles faria cada comando virar um erro. */
+            if (previous != NULL && previous->kind == TOKEN_SEMICOLON) break;
+            /* Depois de um bloco: para, exceto se vier 'casocontrario' (o
+             * resto do cond) ou ';' (o bloco estava no meio de um comando,
+             * como em `a receba [ 1 ];`, e o ';' fecha esse comando). */
+            if (previous != NULL && previous->kind == TOKEN_RIGHT_BRACKET &&
+                kind != TOKEN_KW_CASOCONTRARIO && kind != TOKEN_SEMICOLON) break;
+            if (missing_bracket_before_else(parser)) break;
+        }
+        if (progressed && (is_sync_keyword(kind, global_level) ||
+                           identifier_starts_line(parser, global_level))) break;
+        if (kind == TOKEN_LEFT_BRACKET && !progressed && parser->bracket_balance > 0) {
+            /* O item com erro comeca num '[' e sobra '[' no arquivo: e um '['
+             * solto. Descarta so ele; o conteudo segue no bloco atual e o ']'
+             * dele fecha esse bloco, como devia. */
+            --parser->bracket_balance;
+            (void)advance(parser);
+        } else if (kind == TOKEN_LEFT_BRACKET) {
+            skip_bracketed_block(parser);
+        } else {
+            (void)advance(parser);
+        }
+        progressed = 1;
+    }
+    parser->panic_mode = 0;
+}
+
+/* Palavras que so comecam uma declaracao global. Dentro de um bloco ou de um
+ * registro, indicam que o ']' que o fecharia foi esquecido. */
+static int starts_global_only(const Parser *parser)
+{
+    TokenKind kind = current_token(parser)->kind;
+    if (kind == TOKEN_KW_REGISTRO || kind == TOKEN_KW_OUTRAFUNCAO) return 1;
+    return is_type_start(kind, 1) && peek_at(parser, 1U)->kind == TOKEN_KW_PRINCIPAL &&
+           peek_at(parser, 2U)->kind == TOKEN_LEFT_PAREN;
+}
+
+/* Token que pode abrir o conteudo de um bloco: inicio de comando, ou o ']'
+ * de um bloco vazio. */
+static int starts_block_content(const Parser *parser)
 {
     TokenKind kind = current_token(parser)->kind;
     return looks_like_local_declaration(parser) || kind == TOKEN_IDENTIFIER ||
            kind == TOKEN_KW_REPETE || kind == TOKEN_KW_DURANTE ||
-           kind == TOKEN_KW_COND || kind == TOKEN_KW_RESPOST;
+           kind == TOKEN_KW_COND || kind == TOKEN_KW_RESPOST ||
+           kind == TOKEN_RIGHT_BRACKET;
 }
 
-static void synchronize_statement(Parser *parser, size_t failed_at)
+/* Le os comandos de um bloco ate o ']' (que fica para quem chamou), o fim do
+ * arquivo, uma declaracao global ou o 'casocontrario' de um ramo sem ']'.
+ * Devolve 0 so em falta de memoria. */
+static int parse_block_items(Parser *parser, AstNode *block)
 {
-    if (parser->current == failed_at && !check(parser, TOKEN_EOF) &&
-        !check(parser, TOKEN_RIGHT_BRACKET)) {
-        (void)advance(parser);
+    while (!check(parser, TOKEN_RIGHT_BRACKET) && !check(parser, TOKEN_EOF) &&
+           !starts_global_only(parser) && !missing_bracket_before_else(parser) &&
+           !parser->allocation_failed) {
+        size_t before = parser->current;
+        AstNode *statement;
+        if (match(parser, TOKEN_INVALID)) continue;
+        statement = parse_statement(parser);
+        if (statement != NULL &&
+            !append_node(parser, &block->as.block.statements, statement)) {
+            return 0;
+        }
+        /* Comando com erro: pula ate o proximo ponto seguro. */
+        if (statement == NULL || parser->panic_mode) synchronize(parser, before, 0);
     }
-    while (!check(parser, TOKEN_EOF) && !check(parser, TOKEN_RIGHT_BRACKET)) {
-        if (match(parser, TOKEN_SEMICOLON)) return;
-        if (is_statement_start(parser)) return;
-        (void)advance(parser);
-    }
+    return !parser->allocation_failed;
 }
 
 static AstNode *parse_block(Parser *parser)
@@ -907,30 +1152,36 @@ static AstNode *parse_block(Parser *parser)
         return NULL;
     }
     ++parser->block_depth;
-    open = expect(parser, TOKEN_LEFT_BRACKET, "esperado '[' para iniciar bloco");
-    if (open == NULL) goto finish;
+    if (check(parser, TOKEN_LEFT_BRACKET)) {
+        open = advance(parser);
+        /* Um '[' de verdade abre comandos novos: um erro dentro do bloco nao e
+         * cascata de um erro anterior no cabecalho (condicao, parametros). */
+        parser->panic_mode = 0;
+    } else {
+        syntax_error(parser, current_token(parser), "E-SIN-002", "esperado '[' para iniciar bloco");
+        /* Falta '[' no arquivo (saldo negativo) e o que vem parece conteudo de
+         * bloco: le o bloco como se o '[' estivesse la, para que o ']' dele
+         * feche este bloco, e nao o de fora. Sem essa evidencia (como em
+         * `cond (a) edai respost;`, sem colchete algum), o bloco e abandonado
+         * e quem chamou sincroniza. */
+        if (parser->bracket_balance >= 0 || !starts_block_content(parser)) goto finish;
+        ++parser->bracket_balance;
+        open = current_token(parser);
+    }
     block = new_node(parser, AST_BLOCK, open->span);
     if (block == NULL) goto finish;
-    while (!check(parser, TOKEN_RIGHT_BRACKET) && !check(parser, TOKEN_EOF) &&
-           !parser->allocation_failed) {
-        size_t before = parser->current;
-        AstNode *statement;
-        if (match(parser, TOKEN_INVALID)) continue;
-        statement = parse_statement(parser);
-        if (statement != NULL) {
-            if (!append_node(parser, &block->as.block.statements, statement)) {
-                ast_node_destroy(block);
-                block = NULL;
-                goto finish;
-            }
-        } else {
-            synchronize_statement(parser, before);
-        }
+    if (!parse_block_items(parser, block)) {
+        ast_node_destroy(block);
+        block = NULL;
+        goto finish;
     }
     if (check(parser, TOKEN_RIGHT_BRACKET)) {
         block->span.end = advance(parser)->span.end;
     } else {
+        /* Fim do arquivo, declaracao global ou 'casocontrario' de um ramo: o
+         * ']' foi esquecido. O bloco termina aqui e o saldo e corrigido. */
         syntax_error(parser, current_token(parser), "E-SIN-002", "esperado ']' para encerrar bloco");
+        --parser->bracket_balance;
         block->span.end = last_end(parser, open->span.end);
     }
 finish:
@@ -950,25 +1201,39 @@ static AstNode *parse_struct(Parser *parser)
     node->as.struct_decl.name_span = name->span;
     if (node->as.struct_decl.name == NULL) { ast_node_destroy(node); return NULL; }
     (void)expect(parser, TOKEN_AT, "esperado '@' apos nome do registro");
-    if (expect(parser, TOKEN_LEFT_BRACKET, "esperado '[' para iniciar registro") == NULL) {
-        ast_node_destroy(node); return NULL;
+    if (match(parser, TOKEN_LEFT_BRACKET)) {
+        /* Como em parse_block: o '[' abre campos novos. */
+        parser->panic_mode = 0;
+    } else {
+        /* Sem '[': como em parse_block, le os campos mesmo assim so quando
+         * falta '[' no arquivo e o que vem parece campo. */
+        syntax_error(parser, current_token(parser), "E-SIN-002", "esperado '[' para iniciar registro");
+        if (parser->bracket_balance >= 0 ||
+            !(is_type_start(current_token(parser)->kind, 0) || check(parser, TOKEN_RIGHT_BRACKET))) {
+            ast_node_destroy(node); return NULL;
+        }
+        ++parser->bracket_balance;
     }
-    while (!check(parser, TOKEN_RIGHT_BRACKET) && !check(parser, TOKEN_EOF)) {
+    /* O laco para numa declaracao global: o ']' do registro foi esquecido. */
+    while (!check(parser, TOKEN_RIGHT_BRACKET) && !check(parser, TOKEN_EOF) &&
+           !starts_global_only(parser) && !parser->allocation_failed) {
         size_t before = parser->current;
-        AstNode *field;
+        AstNode *field = NULL;
         if (!is_type_start(current_token(parser)->kind, 0)) {
             syntax_error(parser, current_token(parser), "E-SIN-001", "esperada declaracao de campo");
-            synchronize_statement(parser, before);
-            continue;
+        } else {
+            field = parse_value_declaration(parser, 1);
+            if (field != NULL && !append_node(parser, &node->as.struct_decl.fields, field)) {
+                ast_node_destroy(node); return NULL;
+            }
         }
-        field = parse_value_declaration(parser, 1);
-        if (field != NULL) {
-            if (!append_node(parser, &node->as.struct_decl.fields, field)) { ast_node_destroy(node); return NULL; }
-        } else synchronize_statement(parser, before);
+        /* Campo com erro: pula ate o proximo ponto seguro (ver synchronize). */
+        if (field == NULL || parser->panic_mode) synchronize(parser, before, 0);
     }
     if (check(parser, TOKEN_RIGHT_BRACKET)) node->span.end = advance(parser)->span.end;
     else {
         syntax_error(parser, current_token(parser), "E-SIN-002", "esperado ']' para encerrar registro");
+        --parser->bracket_balance;
         node->span.end = last_end(parser, name->span.end);
     }
     return node;
@@ -992,17 +1257,37 @@ static int parse_parameters(Parser *parser, AstNodeList *parameters)
     return 1;
 }
 
+/* Pula o resto de um cabecalho de funcao com erro: ate o '@' (inclusive) ou
+ * ate o '[' do corpo, sem passar de ']', do fim do arquivo ou de outra
+ * declaracao global. */
+static void skip_function_header(Parser *parser)
+{
+    while (!check(parser, TOKEN_EOF) && !check(parser, TOKEN_LEFT_BRACKET) &&
+           !check(parser, TOKEN_RIGHT_BRACKET) && !starts_global_only(parser)) {
+        if (advance(parser)->kind == TOKEN_AT) return;
+    }
+}
+
 static AstNode *parse_function_after_type(Parser *parser, AstTypeRef *return_type,
                                           SourcePosition start, int is_principal)
 {
     const Token *name;
     AstNode *node;
+    int parameters_ok;
     if (is_principal) {
         name = expect(parser, TOKEN_KW_PRINCIPAL, "esperado 'principal'");
     } else {
         name = expect(parser, TOKEN_IDENTIFIER, "esperado nome da funcao");
     }
-    if (name == NULL) { ast_type_ref_destroy(return_type); return NULL; }
+    if (name == NULL) {
+        /* Sem nome (`outrafuncao inteira (`, `outrafuncao inteira inteira
+         * soma(`): pula o resto do cabecalho e le o corpo mesmo assim, para
+         * que os comandos dele nao sejam tomados por declaracoes globais. */
+        ast_type_ref_destroy(return_type);
+        skip_function_header(parser);
+        ast_node_destroy(parse_block(parser));
+        return NULL;
+    }
     node = new_node(parser, AST_FUNCTION_DECL, span_from(start, name->span.end));
     if (node == NULL) { ast_type_ref_destroy(return_type); return NULL; }
     node->as.function_decl.return_type = *return_type;
@@ -1014,43 +1299,93 @@ static AstNode *parse_function_after_type(Parser *parser, AstTypeRef *return_typ
     node->as.function_decl.is_principal = is_principal;
     if (node->as.function_decl.name == NULL) { ast_node_destroy(node); return NULL; }
     (void)expect(parser, TOKEN_LEFT_PAREN, "esperado '(' apos nome da funcao");
-    if (!parse_parameters(parser, &node->as.function_decl.parameters)) {
-        ast_node_destroy(node); return NULL;
-    }
-    (void)expect(parser, TOKEN_RIGHT_PAREN, "esperado ')' apos parametros");
+    /* Parametro com erro nao abandona a funcao: o resto do cabecalho e pulado
+     * ate o ')' (close_header) e o corpo ainda e analisado, para que os erros
+     * reais dele aparecam sem cascata vinda do cabecalho. */
+    parameters_ok = parse_parameters(parser, &node->as.function_decl.parameters);
+    if (parser->allocation_failed) { ast_node_destroy(node); return NULL; }
+    close_header(parser, "esperado ')' apos parametros");
     (void)expect(parser, TOKEN_AT, "esperado '@' antes do corpo da funcao");
     node->as.function_decl.body = parse_block(parser);
-    if (node->as.function_decl.body == NULL) { ast_node_destroy(node); return NULL; }
+    if (!parameters_ok || node->as.function_decl.body == NULL) {
+        ast_node_destroy(node); return NULL;
+    }
     node->span.end = node->as.function_decl.body->span.end;
     return node;
+}
+
+/* No nivel global: o token atual comeca um comando (nao uma declaracao), vem
+ * logo depois de um ']' e sobra ']' no arquivo. Esse ']' fechou a funcao
+ * antes da hora. */
+static int stray_bracket_before(const Parser *parser)
+{
+    const Token *previous = previous_token(parser);
+    TokenKind kind = current_token(parser)->kind;
+    TokenKind next = peek_at(parser, 1U)->kind;
+    if (parser->bracket_balance >= 0 || previous == NULL ||
+        previous->kind != TOKEN_RIGHT_BRACKET) {
+        return 0;
+    }
+    if (kind == TOKEN_KW_REPETE || kind == TOKEN_KW_DURANTE || kind == TOKEN_KW_COND ||
+        kind == TOKEN_KW_RESPOST || kind == TOKEN_KW_CASOCONTRARIO) {
+        return 1;
+    }
+    return kind == TOKEN_IDENTIFIER &&
+           (next == TOKEN_KW_RECEBA || next == TOKEN_LEFT_PAREN ||
+            next == TOKEN_LEFT_BRACE || next == TOKEN_DOT);
 }
 
 static AstNode *parse_global(Parser *parser)
 {
     SourcePosition start = current_token(parser)->span.start;
     AstTypeRef type;
-#if MACARONICA_PARSER_DEBUG
-    (void)fprintf(stderr, "[debug][parser] declaracao global inicia com %s\n", // debug - remover
-                  token_kind_name(current_token(parser)->kind));
-#endif
     if (check(parser, TOKEN_KW_REGISTRO)) return parse_struct(parser);
     if (match(parser, TOKEN_KW_OUTRAFUNCAO)) {
         if (!parse_type(parser, 1, &type)) return NULL;
         return parse_function_after_type(parser, &type, start, 0);
     }
     if (check(parser, TOKEN_KW_FUNC)) {
+        /* 'func' e erro, mas o resto e lido como 'outrafuncao' (ou como
+         * 'principal'): o corpo ainda e analisado e nao ha cascata. O modo
+         * panico segue ligado ate o '[' do corpo, que o desliga. */
         syntax_error(parser, current_token(parser), "E-SIN-004",
                      "'func' nao possui producao; use 'outrafuncao' ou 'principal'");
-        (void)advance(parser); return NULL;
+        (void)advance(parser);
+        if (!parse_type(parser, 1, &type)) return NULL;
+        return parse_function_after_type(parser, &type, start,
+                                         check(parser, TOKEN_KW_PRINCIPAL));
+    }
+    if (stray_bracket_before(parser)) {
+        /* Um erro so, no primeiro comando fora da funcao. Os comandos que
+         * seguem, ate o ']' que fecharia a funcao, sao lidos como bloco e
+         * descartados, em vez de virarem declaracoes globais erradas. */
+        AstNode *orphan;
+        syntax_error(parser, current_token(parser), "E-SIN-001",
+                     "comando fora de funcao: um ']' a mais antes daqui fechou a funcao");
+        ++parser->bracket_balance;
+        orphan = new_node(parser, AST_BLOCK, current_token(parser)->span);
+        if (orphan != NULL) {
+            (void)parse_block_items(parser, orphan);
+            ast_node_destroy(orphan);
+        }
+        if (check(parser, TOKEN_RIGHT_BRACKET)) (void)advance(parser);
+        return NULL;
     }
     if (!is_type_start(current_token(parser)->kind, 1)) {
+        /* Nao consome: synchronize pula o token (ou o bloco '[ ... ]'). */
         syntax_error(parser, current_token(parser), "E-SIN-001", "esperada declaracao global");
-        if (!check(parser, TOKEN_EOF)) (void)advance(parser);
         return NULL;
     }
     if (!parse_type(parser, 1, &type)) return NULL;
     if (check(parser, TOKEN_KW_PRINCIPAL)) {
         return parse_function_after_type(parser, &type, start, 1);
+    }
+    if (check(parser, TOKEN_IDENTIFIER) && peek_at(parser, 1U)->kind == TOKEN_LEFT_PAREN) {
+        /* `inteira soma(...)` sem 'outrafuncao': um erro, e a funcao e lida
+         * inteira, para que parametros e corpo nao virem declaracoes globais. */
+        syntax_error(parser, current_token(parser), "E-SIN-002",
+                     "declaracao de funcao exige 'outrafuncao' antes do tipo de retorno");
+        return parse_function_after_type(parser, &type, start, 0);
     }
     if (type.name != NULL && strcmp(type.name, "vazio") == 0) {
         syntax_error(parser, current_token(parser), "E-SIN-008",
@@ -1058,23 +1393,6 @@ static AstNode *parse_global(Parser *parser)
         ast_type_ref_destroy(&type); return NULL;
     }
     return parse_declaration_after_type(parser, &type, start, 0, 1);
-}
-
-static int is_global_start(const Parser *parser)
-{
-    TokenKind kind = current_token(parser)->kind;
-    return kind == TOKEN_KW_REGISTRO || kind == TOKEN_KW_OUTRAFUNCAO ||
-           kind == TOKEN_KW_FUNC || is_type_start(kind, 1);
-}
-
-static void synchronize_global(Parser *parser, size_t failed_at)
-{
-    if (parser->current == failed_at && !check(parser, TOKEN_EOF)) (void)advance(parser);
-    while (!check(parser, TOKEN_EOF)) {
-        if (match(parser, TOKEN_SEMICOLON)) return;
-        if (is_global_start(parser)) return;
-        (void)advance(parser);
-    }
 }
 
 FrontendStatus parser_parse(const SourceFile *source,
@@ -1085,6 +1403,7 @@ FrontendStatus parser_parse(const SourceFile *source,
     Parser parser;
     AstNode *program;
     size_t errors_before;
+    size_t index;
     if (source == NULL || tokens == NULL || diagnostics == NULL || out_program == NULL)
         return FRONTEND_STATUS_INTERNAL_ERROR;
     *out_program = NULL;
@@ -1096,11 +1415,11 @@ FrontendStatus parser_parse(const SourceFile *source,
     parser.synthetic_eof.span = source_span(source_position(source->length, 1U, 1U),
                                             source_position(source->length, 1U, 1U));
     errors_before = diagnostics->error_count;
-#if MACARONICA_PARSER_DEBUG
-    (void)fprintf(stderr, "[debug][parser] iniciando `%s` com %zu tokens\n", // debug - remover
-                  source->path != NULL ? source->path : "<fonte>",
-                  tokens->count);
-#endif
+    /* Saldo de colchetes, usado pela recuperacao de erros (ver Parser). */
+    for (index = 0U; index < tokens->count; ++index) {
+        if (tokens->items[index].kind == TOKEN_LEFT_BRACKET) ++parser.bracket_balance;
+        else if (tokens->items[index].kind == TOKEN_RIGHT_BRACKET) --parser.bracket_balance;
+    }
     program = new_node(&parser, AST_PROGRAM, parser.synthetic_eof.span);
     if (program == NULL) return FRONTEND_STATUS_INTERNAL_ERROR;
     if (tokens->count > 0U) program->span.start = tokens->items[0].span.start;
@@ -1109,17 +1428,14 @@ FrontendStatus parser_parse(const SourceFile *source,
         AstNode *declaration;
         if (match(&parser, TOKEN_INVALID)) continue;
         declaration = parse_global(&parser);
-        if (declaration != NULL) {
-            if (!append_node(&parser, &program->as.program.declarations, declaration)) break;
-        } else synchronize_global(&parser, before);
+        if (declaration != NULL &&
+            !append_node(&parser, &program->as.program.declarations, declaration)) break;
+        /* Declaracao com erro (ou que deixou o modo panico ligado, como um
+         * bloco sem ']'): pula ate a proxima declaracao global. */
+        if (declaration == NULL || parser.panic_mode) synchronize(&parser, before, 1);
     }
     program->span.end = current_token(&parser)->span.end;
     *out_program = program;
-#if MACARONICA_PARSER_DEBUG
-    (void)fprintf(stderr, "[debug][parser] fim: %zu declaracoes, %zu erro(s) novo(s)\n", // debug - remover
-                  program->as.program.declarations.count,
-                  diagnostics->error_count - errors_before);
-#endif
     if (parser.allocation_failed) {
         return FRONTEND_STATUS_INTERNAL_ERROR;
     }

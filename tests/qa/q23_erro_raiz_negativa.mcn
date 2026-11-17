@@ -1,0 +1,17 @@
+outrafuncao duplocarpado hipotenusa(duplocarpado a, duplocarpado b) @
+[
+    respost raiz(a * a + b * b);
+]
+
+inteira principal() @
+[
+    duplocarpado x;
+    imprimeDuplocarpado(hipotenusa(3, 4));
+    imprimeNl();
+    x receba -1;
+    imprimeDuplocarpado(raiz(x * x));
+    imprimeNl();
+    imprimeDuplocarpado(raiz(x));
+    imprimeNl();
+    respost 0;
+]

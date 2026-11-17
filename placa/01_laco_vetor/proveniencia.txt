@@ -1,0 +1,10 @@
+programa: tests/placa/01_laco_vetor.mac
+compilador: build/release/macaronica.exe (commit 61cd328, com alteracoes locais)
+geracao: macaronica --alvo=esp32 --ram-limite=65536 tests/placa/01_laco_vetor.mac -o programa.c
+placa: esp32:esp32:esp32doit-devkit-v1, nucleo esp32:esp32 3.3.11
+arduino-cli: arduino-cli  Version: 1.4.1 Commit: e39419312 Date: 2026-01-19T16:12:56Z
+pilha da tarefa macaronica: 65536 bytes (zl_config.h); opcoes extras: -ffp-contract=off
+Sketch uses 272696 bytes (20%) of program storage space. Maximum is 1310720 bytes.
+Global variables use 22196 bytes (6%) of dynamic memory, leaving 305484 bytes for local variables. Maximum is 327680 bytes.
+sha256 01_laco_vetor.bin: f2658d7f8fba505cae4d2af03c244bf8cc68a5d755b7c368576bcc823560a174
+data: 2026-11-17 16:11:15

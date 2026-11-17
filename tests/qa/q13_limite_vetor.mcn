@@ -1,0 +1,40 @@
+inteira vet{1} unico;
+inteira vet{5} a;
+inteira vet{5} b;
+
+inteira principal() @
+[
+    inteira i, soma;
+    bool vet{4} flags;
+    unico{0} receba 42;
+    repete (i receba 0, i < 5, i receba i + 1) edai
+    [
+        a{i} receba i + 1;
+        b{4 - i} receba (i + 1) * 10;
+    ]
+    a{4} receba 500;
+    b{0} receba -1;
+    soma receba 0;
+    repete (i receba 0, i < 5, i receba i + 1) edai
+    [
+        imprimeInteira(a{i});
+        cond (i < 4) edai [ imprimePalavra(" "); ]
+        soma receba soma + a{i} + b{i};
+    ]
+    imprimeNl();
+    repete (i receba 0, i < 5, i receba i + 1) edai
+    [
+        imprimeInteira(b{i});
+        cond (i < 4) edai [ imprimePalavra(" "); ]
+    ]
+    imprimeNl();
+    flags{3} receba VER;
+    flags{0} receba flags{3} E NÃO flags{1};
+    repete (i receba 0, i < 4, i receba i + 1) edai [ imprimeBool(flags{i}); ]
+    imprimeNl();
+    imprimeInteira(unico{0});
+    imprimePalavra(" ");
+    imprimeInteira(soma);
+    imprimeNl();
+    respost unico{0} + a{0} + b{4};
+]

@@ -9,6 +9,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Texto impresso, mensagem de erro e validacao da entrada sao os mesmos do
+ * runtime da placa: ficam em zl_formato.h, compilado dentro deste arquivo. */
+#define ZL_FORMATO_IMPLEMENTACAO
+#include "zl_formato.h"
+
 #if FLT_RADIX != 2 || FLT_MANT_DIG != 24 || FLT_MAX_EXP != 128 || \
     DBL_MANT_DIG != 53 || DBL_MAX_EXP != 1024
 #error "O runtime requer float binary32 e double binary64"
@@ -16,46 +21,28 @@
 
 void zl_erro_execucao(int32_t codigo, int32_t linha)
 {
-    const char *mensagem;
-    switch (codigo) {
-        case ZL_ERRO_DIVISAO_ZERO: mensagem = "divisao por zero"; break;
-        case ZL_ERRO_DIVISAO_OVERFLOW: mensagem = "overflow da divisao inteira"; break;
-        case ZL_ERRO_INDICE: mensagem = "indice de vetor fora dos limites"; break;
-        case ZL_ERRO_RAIZ: mensagem = "raiz de valor negativo"; break;
-        case ZL_ERRO_EXPOENTE: mensagem = "expoente inteiro negativo"; break;
-        case ZL_ERRO_ENTRADA: mensagem = "entrada numerica invalida ou ausente"; break;
-        case ZL_ERRO_POTENCIA: mensagem = "dominio invalido de potencia real"; break;
-        default: mensagem = "falha de execucao"; break;
-    }
+    char texto[ZL_FORMATO_ERRO_TAMANHO];
     (void)fflush(stdout);
-    (void)fprintf(stderr, "linha %" PRId32 ": erro de execucao %" PRId32 ": %s\n",
-                  linha, codigo, mensagem);
+    (void)fprintf(stderr, "%s\n", zl_formato_erro(codigo, linha, texto));
     exit(EXIT_FAILURE);
 }
 
-/* Conversao decimal manual: nao depende de %lld/PRId64 na libc do alvo
- * (msvcrt no MinGW, newlib-nano em placas). */
 void zl_imprime_int(int64_t valor)
 {
-    char digitos[20];
-    size_t total = 0U;
-    uint64_t magnitude = valor < 0 ? UINT64_C(0) - (uint64_t)valor : (uint64_t)valor;
-    do {
-        digitos[total++] = (char)('0' + (int)(magnitude % 10U));
-        magnitude /= 10U;
-    } while (magnitude != 0U);
-    if (valor < 0) (void)fputc('-', stdout);
-    while (total > 0U) (void)fputc(digitos[--total], stdout);
+    char texto[ZL_FORMATO_TAMANHO];
+    (void)fputs(zl_formato_int(valor, texto), stdout);
 }
 
 void zl_imprime_flut(float valor)
 {
-    (void)printf("%.9g", (double)valor);
+    char texto[ZL_FORMATO_TAMANHO];
+    (void)fputs(zl_formato_flut(valor, texto), stdout);
 }
 
 void zl_imprime_duplocarpado(double valor)
 {
-    (void)printf("%.17g", valor);
+    char texto[ZL_FORMATO_TAMANHO];
+    (void)fputs(zl_formato_duplocarpado(valor, texto), stdout);
 }
 
 void zl_imprime_texto(const char *valor)
@@ -65,7 +52,7 @@ void zl_imprime_texto(const char *valor)
 
 void zl_imprime_bool(int32_t valor)
 {
-    (void)fputs(valor != 0 ? "VER" : "FAL", stdout);
+    (void)fputs(zl_formato_bool(valor), stdout);
 }
 
 void zl_imprime_nl(void)
@@ -107,72 +94,27 @@ static void le_token(char *buffer, size_t capacidade, int32_t linha)
 int64_t zl_le_int(int32_t linha)
 {
     char token[256];
-    char *fim;
-    intmax_t valor;
-    int fora_da_faixa;
+    int64_t valor = 0;
     le_token(token, sizeof(token), linha);
-    errno = 0;
-    valor = strtoimax(token, &fim, 10);
-    fora_da_faixa = errno == ERANGE;
-#if INTMAX_MAX > INT64_MAX
-    /* Onde intmax_t passa de 64 bits, ERANGE nao cobre a faixa de inteira. */
-    if (valor < INT64_MIN || valor > INT64_MAX) fora_da_faixa = 1;
-#endif
-    if (fim == token || *fim != '\0' || fora_da_faixa) {
-        zl_erro_execucao(ZL_ERRO_ENTRADA, linha);
-    }
-    return (int64_t)valor;
-}
-
-/* Aceita notacao decimal de entrada, inclusive expoente; rejeita hexadecimal,
- * NaN e infinito. Esta sintaxe de stdin e distinta dos literais da linguagem. */
-static int numero_decimal(const char *texto)
-{
-    const char *p = texto;
-    int digitos = 0;
-    if (*p == '+' || *p == '-') ++p;
-    while (*p >= '0' && *p <= '9') { ++p; ++digitos; }
-    if (*p == '.') {
-        ++p;
-        while (*p >= '0' && *p <= '9') { ++p; ++digitos; }
-    }
-    if (digitos == 0) return 0;
-    if (*p == 'e' || *p == 'E') {
-        ++p;
-        if (*p == '+' || *p == '-') ++p;
-        if (*p < '0' || *p > '9') return 0;
-        while (*p >= '0' && *p <= '9') ++p;
-    }
-    return *p == '\0';
+    if (!zl_formato_le_int(token, &valor)) zl_erro_execucao(ZL_ERRO_ENTRADA, linha);
+    return valor;
 }
 
 float zl_le_flut(int32_t linha)
 {
     char token[256];
-    char *fim;
-    float valor;
+    float valor = 0.0f;
     le_token(token, sizeof(token), linha);
-    errno = 0;
-    valor = strtof(token, &fim);
-    if (!numero_decimal(token) || fim == token || *fim != '\0' ||
-        !isfinite(valor) || (errno == ERANGE && fabsf(valor) >= FLT_MAX)) {
-        zl_erro_execucao(ZL_ERRO_ENTRADA, linha);
-    }
+    if (!zl_formato_le_flut(token, &valor)) zl_erro_execucao(ZL_ERRO_ENTRADA, linha);
     return valor;
 }
 
 double zl_le_duplocarpado(int32_t linha)
 {
     char token[256];
-    char *fim;
-    double valor;
+    double valor = 0.0;
     le_token(token, sizeof(token), linha);
-    errno = 0;
-    valor = strtod(token, &fim);
-    if (!numero_decimal(token) || fim == token || *fim != '\0' ||
-        !isfinite(valor) || (errno == ERANGE && fabs(valor) >= DBL_MAX)) {
-        zl_erro_execucao(ZL_ERRO_ENTRADA, linha);
-    }
+    if (!zl_formato_le_duplocarpado(token, &valor)) zl_erro_execucao(ZL_ERRO_ENTRADA, linha);
     return valor;
 }
 

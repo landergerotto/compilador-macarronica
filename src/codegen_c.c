@@ -403,6 +403,12 @@ static CValue c_binary(CCodegen *gen, const AstNode *node)
         return result;
     }
     right = c_expression(gen, node->as.binary_expr.right);
+    if (node->semantic.conversion_type_id != AST_ID_NONE) {
+        /* Expressao mista: so as conversoes anotadas pela semantica (D-012). */
+        left = c_convert(gen, left, node->semantic.conversion_type_id, node);
+        right = c_convert(gen, right, node->semantic.conversion_type_id, node);
+        integer = left.type_id == TYPE_ID_INTEGER;
+    }
     if (op == AST_OP_DIVIDE || op == AST_OP_INTEGER_DIVIDE) {
         c_write(gen, "  if (%s == 0) zl_erro_execucao(ZL_ERRO_DIVISAO_ZERO, %zu);\n",
                 right.name, node->span.start.line);
@@ -456,6 +462,8 @@ static CValue c_unary(CCodegen *gen, const AstNode *node)
     CValue result = c_new_value(gen, node->semantic.type_id);
     CValue value;
     value = c_expression(gen, operand);
+    if (node->semantic.conversion_type_id != AST_ID_NONE)
+        value = c_convert(gen, value, node->semantic.conversion_type_id, node);
     if (op == AST_OP_UNARY_PLUS) return value;
     c_declare_value(gen, result);
     c_write(gen, " = ");
@@ -729,6 +737,13 @@ FrontendStatus codegen_c_emit(const SourceFile *source, const AstNode *program,
     gen.status = FRONTEND_STATUS_OK;
     c_write(&gen, "/* Macaronica: C99 gerado automaticamente da AST anotada. */\n"
                   "#include <stdint.h>\n#include <limits.h>\n#include \"zl_runtime.h\"\n\n"
+                  "/* zl_erro_execucao nao retorna (como o noreturn da IR). Sem isso,\n"
+                  " * com otimizacao o gcc trata o acesso logo depois da checagem de\n"
+                  " * indice como alcancavel e pode usar o comportamento indefinido\n"
+                  " * dele para tirar a checagem do laco (-Waggressive-loop-optimizations). */\n"
+                  "#if defined(__GNUC__)\n"
+                  "void zl_erro_execucao(int32_t codigo, int32_t linha) __attribute__((noreturn));\n"
+                  "#endif\n\n"
                   "/* inteira = int64_t. A conta inteira e feita em uint64_t (modulo\n"
                   " * 2^64) e volta a int64_t sem conversao fora da faixa, que em C\n"
                   " * dependeria do compilador. */\n"

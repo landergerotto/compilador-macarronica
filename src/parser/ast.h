@@ -123,6 +123,12 @@ typedef struct {
     size_t symbol_id;
     size_t type_id;
     unsigned int flags;
+    /*
+     * Expressao mista (D-012): tipo para o qual os operandos sao convertidos
+     * antes da conta. AST_ID_NONE quando nenhum operando precisa de conversao.
+     * Os back-ends so emitem as conversoes anotadas aqui.
+     */
+    size_t conversion_type_id;
 } AstSemanticInfo;
 
 /*

@@ -1,0 +1,13 @@
+inteira principal() @
+[
+    inteira a, b;
+    a receba leInteira();
+    b receba leInteira();
+    imprimeInteira(a);
+    imprimeNl();
+    imprimeInteira(a // 2);
+    imprimeNl();
+    imprimeInteira(a - a // b * b);
+    imprimeNl();
+    respost 0;
+]

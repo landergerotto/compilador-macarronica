@@ -1,0 +1,50 @@
+inteira principal() @
+[
+    inteira n, i, valor, soma, maior, menor;
+    duplocarpado media, d;
+    flut f;
+    n receba leInteira();
+    repete (i receba 0, i < n, i receba i + 1) edai
+    [
+        valor receba leInteira();
+        soma receba soma + valor;
+        cond (i == 0) edai
+        [
+            maior receba valor;
+            menor receba valor;
+        ]
+        casocontrario edai
+        [
+            cond (valor > maior) edai [ maior receba valor; ]
+            cond (valor < menor) edai [ menor receba valor; ]
+        ]
+    ]
+    media receba soma;
+    d receba n;
+    media receba media / d;
+    imprimePalavra("n ");
+    imprimeInteira(n);
+    imprimeNl();
+    imprimePalavra("soma ");
+    imprimeInteira(soma);
+    imprimeNl();
+    imprimePalavra("maior ");
+    imprimeInteira(maior);
+    imprimePalavra(" menor ");
+    imprimeInteira(menor);
+    imprimeNl();
+    imprimePalavra("media ");
+    imprimeDuplocarpado(media);
+    imprimeNl();
+    f receba leFlut();
+    d receba leDuplocarpado();
+    imprimeFlut(f);
+    imprimePalavra(" ");
+    imprimeDuplocarpado(d);
+    imprimeNl();
+    imprimeFlut(f * f);
+    imprimePalavra(" ");
+    imprimeDuplocarpado(d * d);
+    imprimeNl();
+    respost soma;
+]

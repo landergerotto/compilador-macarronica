@@ -1,0 +1,10 @@
+programa: tests/placa/03_erro_indice.mac
+compilador: build/release/macaronica.exe (commit 61cd328, com alteracoes locais)
+geracao: macaronica --alvo=esp32 --ram-limite=65536 tests/placa/03_erro_indice.mac -o programa.c
+placa: esp32:esp32:esp32doit-devkit-v1, nucleo esp32:esp32 3.3.11
+arduino-cli: arduino-cli  Version: 1.4.1 Commit: e39419312 Date: 2026-01-19T16:12:56Z
+pilha da tarefa macaronica: 65536 bytes (zl_config.h); opcoes extras: -ffp-contract=off
+Sketch uses 272452 bytes (20%) of program storage space. Maximum is 1310720 bytes.
+Global variables use 22116 bytes (6%) of dynamic memory, leaving 305564 bytes for local variables. Maximum is 327680 bytes.
+sha256 03_erro_indice.bin: 270ef9cbf0b767fd24421d0b3c844da8d06e16ac560ee6fba3d029b9ccf740aa
+data: 2026-11-17 16:04:30

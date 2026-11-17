@@ -1,0 +1,6 @@
+inteira principal() @
+[
+    imprimePalavra("status 1000");
+    imprimeNl();
+    respost 1000;
+]

@@ -233,13 +233,18 @@ Contratos entre frentes:
    no cabeçalho e no runtime POSIX (linguagem) e no runtime ESP32 (placa) no
    mesmo ciclo; a integração avisa a outra frente.
 4. **Mesma saída no PC e na placa:** impressão de cada tipo e mensagem de erro
-   de execução idênticas nos dois runtimes. A frente da placa garante isso e
-   pode mover o formato para um arquivo comum aos dois (`runtime/zl_formato.*`).
+   de execução idênticas nos dois runtimes. A frente da placa garante isso; o
+   formato comum aos dois está em `runtime/zl_formato.h`.
 5. **Núcleos MLIR:** nome e assinatura publicados em `docs/dsl.md` (atenção à
    convenção de chamada de `memref` depois do lowering, ou
    `llvm.emit_c_interface`); a frente de benchmark usa os mesmos.
 6. **Diagnósticos:** códigos novos seguem `docs/diagnosticos.md`; a DSL usa
    `E-DSL-nnn` e o alvo, `E-TGT-nnn`, para não colidir com `E-SEM`.
+7. **Códigos de erro de execução:** 1 a 7 são os da linguagem (`ZL_ERRO_*` em
+   `runtime/zl_runtime.h`, um teste cada em `tests/execucao/erros/`); 8 é
+   `ZL_ERRO_PLACA`, uso inválido de pino ou espera (`runtime/zl_placa.h`).
+   Código novo começa no 9 e é pedido à integração antes de usar, para duas
+   frentes não pegarem o mesmo número.
 
 Congelamento: domingo às 23h. Depois disso, só correção de bug com teste.
 
@@ -262,10 +267,10 @@ Congelamento: domingo às 23h. Depois disso, só correção de bug com teste.
 | Cascatas de erro | ainda ocorrem | linguagem (2) |
 | `make` gera build de debug com `[debug]` no `stderr` | **corrigido**: `make` agora gera o release | — |
 | 13 linhas `// debug - remover` | ainda | linguagem (3) |
-| Sem promoção: `2.0 ^ 2`, `f + 1` | atribuição já promove; expressão ainda não | linguagem (4) |
+| Sem promoção: `2.0 ^ 2`, `f + 1` | **corrigido**: expressões mistas com tipo comum (D-012) | — |
 | Fim de linha CRLF | **corrigido**: `.gitattributes` com LF | — |
-| Aviso de fluxo Git no README | ainda | integração (README) |
-| Declaração de uso de IA fora do modelo do Plano de Ensino | ainda | integração (README) |
+| Aviso de fluxo Git no README | **corrigido**: foi para `docs/fluxo-git.md` | — |
+| Declaração de uso de IA fora do modelo do Plano de Ensino | **corrigido**: modelo da seção 6.1; falta a versão do Codex | — |
 | Blocos sem escopo próprio (D-014) | ainda; limita o Excelente | linguagem, se sobrar tempo |
 | Poucos comentários; busca linear na tabela de símbolos | ainda | cada frente comenta o que tocar |
 | 100.000 `+`, registro recursivo, `make test`, E/S, binários em `build/` | corrigidos antes | — |

@@ -1,0 +1,84 @@
+inteira chamadas;
+
+outrafuncao bool f(inteira id, bool valor) @
+[
+    imprimeInteira(id);
+    chamadas receba chamadas + 1;
+    respost valor;
+]
+
+outrafuncao inteira g(inteira id) @
+[
+    imprimeInteira(id);
+    respost id;
+]
+
+outrafuncao inteira soma3(inteira a, inteira b, inteira c) @
+[
+    respost a * 100 + b * 10 + c;
+]
+
+inteira principal() @
+[
+    bool r;
+    inteira vet{3} v;
+    inteira i;
+    r receba f(1, FAL) E f(2, VER);
+    imprimePalavra(" ");
+    imprimeBool(r);
+    imprimeNl();
+    r receba f(1, VER) E f(2, FAL);
+    imprimePalavra(" ");
+    imprimeBool(r);
+    imprimeNl();
+    r receba f(1, VER) OU f(2, FAL);
+    imprimePalavra(" ");
+    imprimeBool(r);
+    imprimeNl();
+    r receba f(1, FAL) OU f(2, VER);
+    imprimePalavra(" ");
+    imprimeBool(r);
+    imprimeNl();
+    r receba f(1, VER) XOR f(2, VER);
+    imprimePalavra(" ");
+    imprimeBool(r);
+    imprimeNl();
+    r receba f(1, FAL) XOR f(2, VER);
+    imprimePalavra(" ");
+    imprimeBool(r);
+    imprimeNl();
+    r receba f(1, FAL) E f(2, VER) OU f(3, VER);
+    imprimePalavra(" ");
+    imprimeBool(r);
+    imprimeNl();
+    r receba f(1, VER) OU f(2, VER) E f(3, VER);
+    imprimePalavra(" ");
+    imprimeBool(r);
+    imprimeNl();
+    r receba f(1, FAL) OU f(2, VER) E f(3, FAL) XOR f(4, VER);
+    imprimePalavra(" ");
+    imprimeBool(r);
+    imprimeNl();
+    r receba NÃO f(1, FAL) E f(2, VER);
+    imprimePalavra(" ");
+    imprimeBool(r);
+    imprimeNl();
+    imprimeInteira(soma3(g(1), g(2), g(3)));
+    imprimeNl();
+    imprimeInteira(g(4) - g(5) * g(6));
+    imprimeNl();
+    i receba 0;
+    v{g(i + 1) - 1} receba g(7);
+    imprimeNl();
+    imprimeInteira(v{0});
+    imprimeInteira(v{1});
+    imprimeInteira(v{2});
+    imprimeNl();
+    i receba 2;
+    cond (i < 3 E v{i} == 0) edai [ imprimePalavra("protegido"); ]
+    i receba 3;
+    cond (i < 3 E v{i} == 0) edai [ imprimePalavra("nunca"); ]
+    casocontrario edai [ imprimePalavra(" sem indice 3"); ]
+    imprimeNl();
+    respost chamadas;
+]

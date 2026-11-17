@@ -1,0 +1,23 @@
+inteira principal() @
+[
+    inteira n, i, grande;
+    flut soma, lido;
+    duplocarpado pi;
+    n receba leInteira();
+    repete (i receba 0, i < n, i receba i + 1) edai
+    [
+        lido receba leFlut();
+        soma receba soma + lido;
+    ]
+    grande receba leInteira();
+    pi receba leDuplocarpado();
+    imprimeFlut(soma);
+    imprimeNl();
+    imprimeInteira(grande * 100);
+    imprimeNl();
+    imprimeDuplocarpado(pi);
+    imprimeNl();
+    imprimeDuplocarpado(pi + pi);
+    imprimeNl();
+    respost n;
+]

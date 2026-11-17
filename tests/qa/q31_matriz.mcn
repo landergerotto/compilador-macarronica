@@ -1,0 +1,62 @@
+inteira vet{16} a;
+inteira vet{16} b;
+inteira vet{16} c;
+
+outrafuncao inteira pos(inteira linha, inteira coluna) @
+[
+    respost linha * 4 + coluna;
+]
+
+outrafuncao vazio multiplica() @
+[
+    inteira i, j, k, soma;
+    repete (i receba 0, i < 4, i receba i + 1) edai
+    [
+        repete (j receba 0, j < 4, j receba j + 1) edai
+        [
+            soma receba 0;
+            repete (k receba 0, k < 4, k receba k + 1) edai
+            [
+                soma receba soma + a{pos(i, k)} * b{pos(k, j)};
+            ]
+            c{pos(i, j)} receba soma;
+        ]
+    ]
+]
+
+outrafuncao vazio mostra() @
+[
+    inteira i, j;
+    repete (i receba 0, i < 4, i receba i + 1) edai
+    [
+        repete (j receba 0, j < 4, j receba j + 1) edai
+        [
+            cond (j > 0) edai [ imprimePalavra(" "); ]
+            imprimeInteira(c{pos(i, j)});
+        ]
+        imprimeNl();
+    ]
+]
+
+inteira principal() @
+[
+    inteira i, j, traco;
+    repete (i receba 0, i < 4, i receba i + 1) edai
+    [
+        repete (j receba 0, j < 4, j receba j + 1) edai
+        [
+            a{pos(i, j)} receba i + j;
+            cond (i == j) edai [ b{pos(i, j)} receba 2; ]
+            casocontrario cond (j == i + 1) edai [ b{pos(i, j)} receba 1; ]
+            casocontrario edai [ b{pos(i, j)} receba 0; ]
+        ]
+    ]
+    multiplica();
+    mostra();
+    traco receba 0;
+    repete (i receba 0, i < 4, i receba i + 1) edai [ traco receba traco + c{pos(i, i)}; ]
+    imprimePalavra("traco ");
+    imprimeInteira(traco);
+    imprimeNl();
+    respost traco;
+]

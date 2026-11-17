@@ -14,11 +14,8 @@
 
 #include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
-
-#ifndef MACARONICA_COMPILER_DEBUG
-#define MACARONICA_COMPILER_DEBUG 1
-#endif
 
 static void dump_tokens(const TokenBuffer *tokens, const char *path)
 {
@@ -31,9 +28,12 @@ static void dump_tokens(const TokenBuffer *tokens, const char *path)
 }
 
 /*
- * tmpfile e C99 e apaga seu armazenamento ao fechar. So abrimos a saida real
- * depois de toda a IR ter sido gerada e descarregada com sucesso. Assim um
- * erro de fonte ou de codegen preserva ate uma saida preexistente.
+ * A saida e gerada primeiro em "<saida>.tmp", ao lado dela, e so substitui a
+ * saida real (rename) depois de toda a IR ter sido gerada e gravada com
+ * sucesso. Em qualquer erro o temporario e apagado, entao nada parcial fica
+ * para tras e uma saida preexistente e preservada. Nao usamos tmpfile(): no
+ * Windows (msvcrt) ele cria o arquivo na raiz do drive do diretorio atual e
+ * falha quando ali nao ha permissao de escrita (por exemplo, C:\).
  */
 static CompilerExitCode write_generated_output(const SourceFile *source,
                                           const AstNode *program,
@@ -42,63 +42,56 @@ static CompilerExitCode write_generated_output(const SourceFile *source,
                                           const char *output_path,
                                           int emit_c)
 {
-    FILE *temporary = tmpfile();
-    FILE *output = NULL;
+    static const char suffix[] = ".tmp";
+    size_t path_length = strlen(output_path);
+    char *temporary_path = malloc(path_length + sizeof(suffix));
+    FILE *temporary;
     FrontendStatus status;
     CompilerExitCode result = COMPILER_EXIT_IO_ERROR;
-    unsigned char buffer[8192];
-    size_t count;
-    int io_failed = 0;
-    int output_created = 0;
+    int write_failed;
 
+    if (temporary_path == NULL) {
+        (void)fputs("erro interno: memoria insuficiente\n", stderr);
+        return COMPILER_EXIT_INTERNAL_ERROR;
+    }
+    memcpy(temporary_path, output_path, path_length);
+    memcpy(temporary_path + path_length, suffix, sizeof(suffix));
+
+    temporary = fopen(temporary_path, "wb");
     if (temporary == NULL) {
-        (void)fprintf(stderr, "erro de E/S: nao foi possivel criar temporario para `%s`: %s\n",
-                      output_path, strerror(errno));
+        (void)fprintf(stderr, "erro de E/S: nao foi possivel abrir `%s` para escrita: %s\n",
+                      temporary_path, strerror(errno));
+        free(temporary_path);
         return COMPILER_EXIT_IO_ERROR;
     }
     status = emit_c ? codegen_c_emit(source, program, semantic, diagnostics, temporary)
                     : codegen_llvm_emit(source, program, semantic, diagnostics, temporary);
+    write_failed = ferror(temporary) != 0;
+    if (fclose(temporary) != 0) write_failed = 1;
     if (status != FRONTEND_STATUS_OK) {
-        result = ferror(temporary) ? COMPILER_EXIT_IO_ERROR :
+        result = write_failed ? COMPILER_EXIT_IO_ERROR :
                  status == FRONTEND_STATUS_SOURCE_ERROR ? COMPILER_EXIT_SOURCE_ERROR :
                  COMPILER_EXIT_INTERNAL_ERROR;
         goto cleanup;
     }
-    if (fflush(temporary) != 0 || fseek(temporary, 0L, SEEK_SET) != 0) {
-        (void)fprintf(stderr, "erro de E/S: nao foi possivel finalizar IR temporaria: %s\n", strerror(errno));
+    if (write_failed) {
+        (void)fprintf(stderr, "erro de E/S: falha ao gravar `%s`\n", temporary_path);
         goto cleanup;
     }
-    output = fopen(output_path, "wb");
-    if (output == NULL) {
-        (void)fprintf(stderr, "erro de E/S: nao foi possivel abrir `%s` para escrita: %s\n",
-                      output_path, strerror(errno));
-        goto cleanup;
-    }
-    output_created = 1;
-    while ((count = fread(buffer, 1U, sizeof(buffer), temporary)) != 0U) {
-        if (fwrite(buffer, 1U, count, output) != count) {
-            io_failed = 1;
-            break;
+    if (rename(temporary_path, output_path) != 0) {
+        /* No Windows rename nao substitui um destino que ja existe. */
+        (void)remove(output_path);
+        if (rename(temporary_path, output_path) != 0) {
+            (void)fprintf(stderr, "erro de E/S: nao foi possivel publicar `%s`: %s\n",
+                          output_path, strerror(errno));
+            goto cleanup;
         }
-    }
-    if (ferror(temporary)) io_failed = 1;
-    if (fclose(output) != 0) io_failed = 1;
-    output = NULL;
-    if (io_failed) {
-        (void)fprintf(stderr, "erro de E/S: falha ao publicar `%s`\n", output_path);
-        goto cleanup;
     }
     result = COMPILER_EXIT_SUCCESS;
 
 cleanup:
-    if (output != NULL && fclose(output) != 0) result = COMPILER_EXIT_IO_ERROR;
-    if (fclose(temporary) != 0 && result == COMPILER_EXIT_SUCCESS) {
-        (void)fputs("erro de E/S: falha ao fechar IR temporaria\n", stderr);
-        result = COMPILER_EXIT_IO_ERROR;
-    }
-    if (result != COMPILER_EXIT_SUCCESS && output_created && remove(output_path) != 0) {
-        (void)fprintf(stderr, "erro de E/S: nao foi possivel remover saida incompleta `%s`\n", output_path);
-    }
+    if (result != COMPILER_EXIT_SUCCESS) (void)remove(temporary_path);
+    free(temporary_path);
     return result;
 }
 
@@ -125,9 +118,6 @@ CompilerExitCode compiler_compile_file(const char *path,
         goto cleanup;
     }
 
-#if MACARONICA_COMPILER_DEBUG
-    (void)fprintf(stderr, "[debug][compiler] carregando `%s`\n", path); // debug - remover
-#endif
 
     if (!source_file_load(&source, path, io_error, sizeof(io_error))) {
         if (errno == ENOMEM) {

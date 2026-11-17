@@ -1,0 +1,66 @@
+registro Ponto @ [ inteira x; inteira y; ]
+registro Retangulo @ [ Ponto canto; Ponto oposto; palavra nome; ]
+
+outrafuncao Ponto ponto(inteira x, inteira y) @
+[
+    Ponto p;
+    p.x receba x;
+    p.y receba y;
+    respost p;
+]
+
+outrafuncao inteira area(Retangulo r) @
+[
+    inteira largura, altura;
+    largura receba r.oposto.x - r.canto.x;
+    altura receba r.oposto.y - r.canto.y;
+    respost largura * altura;
+]
+
+outrafuncao Retangulo desloca(Retangulo r, inteira dx, inteira dy) @
+[
+    Retangulo s;
+    s receba r;
+    s.canto.x receba s.canto.x + dx;
+    s.canto.y receba s.canto.y + dy;
+    s.oposto.x receba s.oposto.x + dx;
+    s.oposto.y receba s.oposto.y + dy;
+    respost s;
+]
+
+outrafuncao vazio mostra(Retangulo r) @
+[
+    imprimePalavra(r.nome);
+    imprimePalavra(" (");
+    imprimeInteira(r.canto.x);
+    imprimePalavra(",");
+    imprimeInteira(r.canto.y);
+    imprimePalavra(")-(");
+    imprimeInteira(r.oposto.x);
+    imprimePalavra(",");
+    imprimeInteira(r.oposto.y);
+    imprimePalavra(") area ");
+    imprimeInteira(area(r));
+    imprimeNl();
+]
+
+inteira principal() @
+[
+    Retangulo a, b;
+    a.canto receba ponto(1, 2);
+    a.oposto receba ponto(4, 7);
+    a.nome receba "a";
+    b receba a;
+    b.nome receba "b";
+    b.oposto.x receba 10;
+    mostra(a);
+    mostra(b);
+    b receba desloca(b, -3, 5);
+    mostra(b);
+    mostra(a);
+    imprimeInteira(desloca(a, 100, 100).oposto.y);
+    imprimeNl();
+    imprimeBool(a.canto.x == b.canto.x);
+    imprimeNl();
+    respost area(b) - area(a);
+]

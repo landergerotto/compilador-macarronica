@@ -1,0 +1,9 @@
+# Fora do contexto da imagem: historico do git, builds e binarios locais.
+.git
+.orquestra
+.vscode
+build
+esp32/build
+**/*.o
+**/*.obj
+**/*.exe

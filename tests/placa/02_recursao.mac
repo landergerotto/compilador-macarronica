@@ -1,0 +1,40 @@
+outrafuncao inteira fatorial(inteira n) @
+[
+    cond (n < 2) edai
+    [
+        respost 1;
+    ]
+    casocontrario edai
+    [
+        respost n * fatorial(n - 1);
+    ]
+]
+
+outrafuncao inteira fibonacci(inteira n) @
+[
+    cond (n < 2) edai
+    [
+        respost n;
+    ]
+    casocontrario edai
+    [
+        respost fibonacci(n - 1) + fibonacci(n - 2);
+    ]
+]
+
+inteira principal() @
+[
+    inteira i;
+    repete (i receba 0, i < 21, i receba i + 5) edai
+    [
+        imprimePalavra("fatorial(");
+        imprimeInteira(i);
+        imprimePalavra(") = ");
+        imprimeInteira(fatorial(i));
+        imprimeNl();
+    ]
+    imprimePalavra("fibonacci(20) = ");
+    imprimeInteira(fibonacci(20));
+    imprimeNl();
+    respost 0;
+]

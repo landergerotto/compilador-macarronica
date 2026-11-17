@@ -1,0 +1,10 @@
+programa: tests/placa/04_led_botao.mac
+compilador: build/release/macaronica.exe (commit 61cd328)
+geracao: macaronica --alvo=esp32 --ram-limite=65536 tests/placa/04_led_botao.mac -o programa.c
+placa: esp32:esp32:esp32doit-devkit-v1, nucleo esp32:esp32 3.3.11
+arduino-cli: arduino-cli  Version: 1.4.1 Commit: e39419312 Date: 2026-01-19T16:12:56Z
+pilha da tarefa macaronica: 65536 bytes (zl_config.h); opcoes extras: -ffp-contract=off
+Sketch uses 274244 bytes (20%) of program storage space. Maximum is 1310720 bytes.
+Global variables use 22156 bytes (6%) of dynamic memory, leaving 305524 bytes for local variables. Maximum is 327680 bytes.
+sha256 04_led_botao.bin: 0a226ab8c960b3e17f441d4d4534fd61f5308d195c626e323f795d1b2df38515
+data: 2026-11-17 15:52:18

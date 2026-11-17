@@ -10,10 +10,6 @@
 #include "../lexer/token.h"
 #include "ast.h"
 
-#ifndef MACARONICA_PARSER_DEBUG
-#define MACARONICA_PARSER_DEBUG 1
-#endif
-
 /*
  * Ele so olha os tokens; source entra aqui para localizar os erros. A AST sai
  * por out_program e passa a ser responsabilidade de quem chamou.

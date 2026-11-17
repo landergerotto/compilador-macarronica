@@ -1,0 +1,30 @@
+inteira principal() @
+[
+    flut f, um, tres;
+    duplocarpado d, umd, tresd, dois, dez;
+    f receba 16777217;
+    imprimeFlut(f);
+    imprimeNl();
+    um receba 1;
+    tres receba 3;
+    imprimeFlut(um / tres);
+    imprimeNl();
+    umd receba 1;
+    tresd receba 3;
+    d receba umd / tresd;
+    imprimeDuplocarpado(d);
+    imprimeNl();
+    dois receba 2;
+    imprimeDuplocarpado(raiz(dois));
+    imprimeNl();
+    dez receba 10;
+    imprimeDuplocarpado(dois ^ dez);
+    imprimeNl();
+    imprimeDuplocarpado(d * tresd);
+    imprimeNl();
+    imprimeInteira(2 ^ 62);
+    imprimeNl();
+    imprimeBool(d * tresd > umd);
+    imprimeNl();
+    respost 0;
+]

@@ -1,0 +1,10 @@
+programa: tests/placa/02_recursao.mac
+compilador: build/release/macaronica.exe (commit 61cd328, com alteracoes locais)
+geracao: macaronica --alvo=esp32 --ram-limite=65536 tests/placa/02_recursao.mac -o programa.c
+placa: esp32:esp32:esp32doit-devkit-v1, nucleo esp32:esp32 3.3.11
+arduino-cli: arduino-cli  Version: 1.4.1 Commit: e39419312 Date: 2026-01-19T16:12:56Z
+pilha da tarefa macaronica: 65536 bytes (zl_config.h); opcoes extras: -ffp-contract=off
+Sketch uses 272008 bytes (20%) of program storage space. Maximum is 1310720 bytes.
+Global variables use 22116 bytes (6%) of dynamic memory, leaving 305564 bytes for local variables. Maximum is 327680 bytes.
+sha256 02_recursao.bin: d3b990bf538a7a0d4445334543f6b539ead9c1cf2ebd11967e5b65e8f33c3acc
+data: 2026-11-17 16:12:41

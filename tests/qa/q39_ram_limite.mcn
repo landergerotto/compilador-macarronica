@@ -1,0 +1,11 @@
+inteira vet{10000} grande;
+
+inteira principal() @
+[
+    inteira i, soma;
+    repete (i receba 0, i < 10000, i receba i + 1) edai [ grande{i} receba i; ]
+    repete (i receba 0, i < 10000, i receba i + 1) edai [ soma receba soma + grande{i}; ]
+    imprimeInteira(soma);
+    imprimeNl();
+    respost 0;
+]

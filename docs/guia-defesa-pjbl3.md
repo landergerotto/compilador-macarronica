@@ -136,8 +136,12 @@ altera uma global para tornar essa diferença observável.
 
 `convert_value` recebe o tipo esperado pelo destino, parâmetro ou retorno.
 O tipo original da expressão continua na AST. `fptrunc` reduziria precisão,
-mas essa conversão não é autorizada pela linguagem atual. Os operadores
-binários não promovem automaticamente seus operandos.
+mas essa conversão não é autorizada pela linguagem atual. Numa expressão
+mista (`f + 1`, `2.0 ^ 2`, `7 / 2`), a semântica grava o tipo comum em
+`semantic.conversion_type_id` do operador, e `emit_binary` chama
+`convert_value` nos dois operandos antes da conta: `sitofp` de `inteira` para
+real e `fpext` de `flut` para `duplocarpado`. A tabela completa está em
+`decisoes_backend.md`, seção "Expressões mistas".
 
 `emit_call` avalia os argumentos antes de escrever `call`, preservando sua
 ordem. Cada argumento é convertido para o parâmetro correspondente.

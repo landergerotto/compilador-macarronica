@@ -14,7 +14,7 @@ As revisões para o PjBL 3 foram decididas pelo projeto para cumprir o escopo so
 
 1. **Regra oficial:** a fonte exige um front-end em C, mas não define extensão nem codificação do arquivo de entrada.
 2. **Lacuna:** é necessário estabelecer como a ferramenta recebe um programa e como representa `NÃO`.
-3. **Decisão do projeto:** a ferramenta recebe um caminho terminado em `.mac` ou `.mcn` (`.mcn` é a extensão dos casos de teste distribuídos pelo professor, aceita desde o PjBL 3/4). O conteúdo é UTF-8. A extensão é uma convenção da ferramenta, não parte da gramática. Palavras-chave são sensíveis a maiúsculas e acentos: `NÃO` é aceito e `NAO` não é seu sinônimo.
+3. **Decisão do projeto:** a ferramenta recebe um caminho terminado em `.mac` ou `.mcn` (`.mcn` é a extensão dos casos de teste distribuídos pelo professor, aceita desde o PjBL 3/4). O conteúdo é UTF-8. A extensão é uma convenção da ferramenta, não parte da gramática. Palavras-chave são sensíveis a maiúsculas e acentos: `NÃO` é a única grafia da negação. `NAO` (sem til) e as grafias com til em outra caixa (`não`, `Não`, `NãO`...) geram `E-LEX-007`, que aponta a grafia certa; o lexer segue como se fosse `NÃO`, para não gerar erros sintáticos em cascata. `nao` e `Nao` continuam nomes válidos.
 4. **Impacto:** o `main` valida a extensão e a abertura; o lexer decodifica UTF-8 e mantém linha e coluna em caracteres. Parser, semântica e IR não dependem do nome do arquivo.
 
 ## D-002 - Vocabulário ausente do alfabeto resumido
@@ -29,7 +29,7 @@ As revisões para o PjBL 3 foram decididas pelo projeto para cumprir o escopo so
 1. **Regra oficial:** o alfabeto contém `a..z`, `A..Z` e `0..9`, sem formalizar identificadores ou espaços.
 2. **Lacuna:** início de identificador, separadores e sensibilidade a caixa não são definidos.
 3. **Decisão do projeto:** identificadores seguem `[A-Za-z][A-Za-z0-9]*`. Sublinhado não é aceito nesta versão. Espaço, tabulação, CR e LF separam tokens e são ignorados, mas atualizam a localização. Todos os lexemas são sensíveis a caixa.
-4. **Impacto:** `resultado1` é identificador; `1resultado` é número seguido de identificador; `resultado_1` contém caractere inválido. `VER`, `FAL`, `OU`, `E`, `NÃO` e `XOR` não podem ser nomes.
+4. **Impacto:** `resultado1` é identificador; `1resultado` é número seguido de identificador; `resultado_1` contém caractere inválido. `VER`, `FAL`, `OU`, `E`, `NÃO` e `XOR` não podem ser nomes, nem `NAO` (`E-LEX-007`, D-001).
 
 ## D-004 - Literais
 
@@ -93,13 +93,13 @@ As revisões para o PjBL 3 foram decididas pelo projeto para cumprir o escopo so
 1. **Regra oficial:** `//` é divisão inteira, `^` é potência, `raiz` é raiz quadrada, `XOR` é lógico e `!` é comparador de diferença. A fonte não especifica domínios e tipos resultantes.
 2. **Lacuna:** sem essas regras, a verificação de tipos não é determinística.
 3. **Decisão do projeto:**
-   - `+`, `-` e `*`: dois operandos do mesmo tipo numérico; resultado do mesmo tipo;
-   - `/`: dois operandos do mesmo tipo `flut` ou `duplocarpado`; resultado do mesmo tipo;
-   - `//`: dois operandos `inteira`; quociente truncado em direção a zero e resultado `inteira`;
-   - `^`: base e expoente do mesmo tipo numérico; resultado desse tipo; associa à direita;
-   - `raiz(expr)`: operando `flut` ou `duplocarpado`; resultado do mesmo tipo;
-   - `<` e `>`: operandos do mesmo tipo numérico; resultado `bool`;
-   - `==` e `!`: operandos escalares de mesmo tipo; resultado `bool`; `!` é binário e significa diferente;
+   - `+`, `-` e `*`: dois operandos numéricos; a conta é feita no tipo comum (D-012) e o resultado tem esse tipo;
+   - `/`: divisão real; dois operandos numéricos convertidos para o tipo comum, ou para `duplocarpado` se os dois forem `inteira`; resultado real;
+   - `//`: dois operandos `inteira`; quociente truncado em direção a zero e resultado `inteira`; operando real é erro semântico;
+   - `^`: base e expoente numéricos convertidos para o tipo comum; resultado desse tipo (`inteira ^ inteira` é `inteira`); associa à direita;
+   - `raiz(expr)`: operando numérico; `flut` e `duplocarpado` mantêm o tipo e `inteira` é calculada em `duplocarpado`;
+   - `<` e `>`: operandos numéricos comparados no tipo comum; resultado `bool`;
+   - `==` e `!`: operandos numéricos (no tipo comum) ou escalares de mesmo tipo; resultado `bool`; `!` é binário e significa diferente;
    - `NÃO`: um `bool`; resultado `bool`;
    - `E`, `OU` e `XOR`: dois `bool`; resultado `bool`.
 
@@ -110,8 +110,8 @@ As revisões para o PjBL 3 foram decididas pelo projeto para cumprir o escopo so
 
 1. **Regra oficial:** não há regra de conversão entre `inteira`, `flut` e `duplocarpado`.
 2. **Lacuna:** não se sabe se atribuições, argumentos, retornos ou operadores promovem tipos.
-3. **Decisao do projeto (revisada com aprovacao do usuario):** atribuicoes, argumentos e retornos aceitam tipos identicos e as promocoes `inteira -> flut`, `inteira -> duplocarpado` e `flut -> duplocarpado`. Conversoes inversas, casts explicitos e promocao entre operandos de operadores nao sao aceitos. Vetores e registros nao ganham conversao estrutural; elementos numericos de vetores seguem a regra escalar. Inteiros grandes podem sofrer arredondamento ao serem convertidos para ponto flutuante.
-4. **Impacto:** a expressão mantém seu tipo original na AST. O destino da atribuição, o parâmetro da assinatura ou o retorno declarado fornece o tipo esperado. O gerador LLVM compara esses tipos e emite `sitofp` para inteiro -> ponto flutuante e `fpext` para flut -> duplocarpado. Inteira -> duplocarpado é direta, sem passar por flut. As conversões são explícitas nas instruções LLVM; isso não cria sintaxe de cast na fonte. Testes de execução devem verificar atribuição, argumento e retorno, inclusive arredondamento de `inteira -> flut`.
+3. **Decisao do projeto (revisada com aprovacao do usuario):** atribuicoes, argumentos e retornos aceitam tipos identicos e as promocoes `inteira -> flut`, `inteira -> duplocarpado` e `flut -> duplocarpado`. Conversoes inversas e casts explicitos nao sao aceitos. **Revisao no PjBL 3** (enunciado, Secao 4.3): operadores binarios aceitam expressoes mistas; o tipo comum e o mais largo dos dois na ordem `inteira < flut < duplocarpado` e o operando de menor ordem e convertido para ele antes da conta (detalhes por operador em D-011 e em `decisoes_backend.md`). Vetores e registros nao ganham conversao estrutural; elementos numericos de vetores seguem a regra escalar. Inteiros grandes podem sofrer arredondamento ao serem convertidos para ponto flutuante.
+4. **Impacto:** a expressão mantém seu tipo original na AST; num operador misto, a semântica grava o tipo comum em `semantic.conversion_type_id`. O destino da atribuição, o parâmetro da assinatura ou o retorno declarado fornece o tipo esperado. O gerador LLVM compara esses tipos e emite `sitofp` para inteiro -> ponto flutuante e `fpext` para flut -> duplocarpado. Inteira -> duplocarpado é direta, sem passar por flut. As conversões são explícitas nas instruções LLVM; isso não cria sintaxe de cast na fonte. Testes de execução devem verificar atribuição, argumento e retorno, inclusive arredondamento de `inteira -> flut`.
 
 ## D-013 - Registros
 
@@ -166,7 +166,7 @@ As revisões para o PjBL 3 foram decididas pelo projeto para cumprir o escopo so
 
 1. **Regra oficial:** erro léxico deve indicar ao menos linha; erro sintático, linha e quando possível token; o programa não pode travar. A rubrica valoriza coluna e múltiplos erros.
 2. **Lacuna:** formato e estratégia de recuperação não são definidos.
-3. **Decisão do projeto:** todo diagnóstico tem `arquivo:linha:coluna`, fase, código estável e mensagem, por exemplo `algo.mac:3:8: lexico E-LEX-001: caractere '_' não pertence à linguagem`. O lexer avança ao menos um caractere em erro. O parser sincroniza em `;`, `]` ou início de declaração/controle. A semântica usa tipo de erro interno para evitar diagnósticos em cascata. Logs de depuração vão para `stderr`, começam por `[debug]` e as linhas C que os produzem recebem `// debug - remover`.
+3. **Decisão do projeto:** todo diagnóstico tem `arquivo:linha:coluna`, fase, código estável e mensagem, por exemplo `algo.mac:3:8: lexico E-LEX-001: caractere '_' não pertence à linguagem`. O lexer avança ao menos um caractere em erro. A meta é um diagnóstico por erro real; dois erros em comandos distintos geram dois diagnósticos. O parser usa modo pânico com sincronização. O primeiro erro de um comando liga o modo pânico, e os erros seguintes do mesmo comando, que são consequência dele, não são relatados. O parser descarta tokens até um ponto seguro e desliga o modo pânico. Pontos seguros: depois de `;` ou de um bloco `[ ... ]`, antes de `]`, de uma palavra que só inicia comando ou declaração, ou de um identificador que abre linha com cara de comando. Um cabeçalho entre parênteses com erro é pulado até o `)`, e o corpo ainda é analisado. O saldo de colchetes do arquivo (`[` menos `]`) decide entre supor um `[` esquecido, descartar um `[` solto ou fechar um ramo antes de `casocontrario`. A semântica usa tipo de erro interno para evitar diagnósticos em cascata. Os testes conferem a quantidade exata de diagnósticos (coluna `erros` de `tests/manifest.tsv`). Logs de depuração vão para `stderr`, começam por `[debug]` e as linhas C que os produzem recebem `// debug - remover`.
 4. **Impacto:** cada token carrega posição inicial e final. As três fases acumulam erros quando puderem continuar com segurança e retornam estado de falha sem abortar o processo.
 
 ## D-019 - Instrumentação temporária de depuração

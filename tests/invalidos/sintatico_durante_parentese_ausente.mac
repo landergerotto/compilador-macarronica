@@ -1,0 +1,10 @@
+vazio principal() @
+[
+    inteira a;
+    a receba 0;
+    durante (a < 3 edai
+    [
+        a receba a + 1;
+    ]
+    respost;
+]

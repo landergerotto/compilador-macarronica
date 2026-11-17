@@ -266,18 +266,34 @@ visual. O runtime ESP32 desta etapa atende GPIO/espera e texto/nova linha;
 serviços numéricos e de entrada ainda dependem do runtime POSIX.
 Versões, evidências e limitações estão em [docs/placa.md](docs/placa.md).
 
-## Uso de IA
+## Declaração de uso de IA
 
-O desenvolvimento usa Codex para diagnóstico, implementação, revisão,
-documentação e execução de testes, com responsabilidades de arquitetura,
-linguagem, IR, runtime, testes, otimização e revisão pedagógica. Propostas de
-IA exigem revisão do grupo e validação pelas ferramentas. O grupo deve saber
-explicar a AST anotada, os tipos, os blocos/terminadores, as guardas de runtime,
-as conversões e o efeito de `mem2reg`/`phi`. Resultados de testes relatados
-referem-se apenas às ferramentas efetivamente executadas, não a uma prova
-formal de correção.
+Declaração padrão do Plano de Ensino (seção 6.1, Resolução nº 274/2024 CONSUN):
 
-### Apoio de IA nas contribuições da branch `luiz/melhorias`
+> Durante a preparação deste compilador (código, testes e documentação dos
+> PjBL 1 a 4), os autores usaram Codex (OpenAI, versão [VERSÃO DO CODEX]),
+> nas contribuições de Lander Furusho Gerotto, e Claude Code (Anthropic,
+> modelo Claude Opus 5.5), nas contribuições de Luiz Toledo, para
+> diagnosticar defeitos, implementar e revisar partes do código, escrever
+> testes e documentação e executar as baterias de teste. Após usar essas
+> ferramentas, os autores revisaram e editaram o conteúdo conforme necessário
+> e assumem total responsabilidade pelo conteúdo.
+
+Toda proposta das ferramentas passou pela revisão do grupo e pelas baterias de
+teste antes de entrar no projeto. Os resultados de teste citados valem para as
+ferramentas que de fato foram executadas e não são prova formal de correção.
+
+### Apoio do Claude Code nas contribuições de Luiz Toledo: branch `luiz/placa` (PjBL 3 e 4)
+
+| Parte do projeto | Em que consistiu o apoio |
+|---|---|
+| [`src/semantic/semantic.c`](src/semantic/semantic.c), [`src/semantic/type.c`](src/semantic/type.c) e os dois geradores | Expressões mistas `inteira`/`flut`/`duplocarpado`: tipo comum anotado na AST e conversões emitidas pelos back-ends |
+| [`src/codegen_c.c`](src/codegen_c.c), [`src/target.c`](src/target.c), [`runtime/`](runtime) | Back-end C99 para a ESP32, verificações do alvo (pino e RAM) e runtime da placa |
+| [`tools/placa.sh`](tools/placa.sh), [`tools/serial.ps1`](tools/serial.ps1), [`mk/placa.mk`](mk/placa.mk) | Gravação pela rota Arduino e `make placa-testar`, que compara a serial com o `.esperado` |
+| [`src/compiler.c`](src/compiler.c) | Saída escrita num arquivo temporário ao lado do destino, que só substitui o arquivo final se a geração terminar |
+| [`scripts/qa/`](scripts/qa), [`tests/qa/`](tests/qa), [`tests/execucao/`](tests/execucao) | Teste diferencial entre rotas, testes de mutação e os programas da Seção 6.1 |
+
+### Apoio do Claude Code nas contribuições de Luiz Toledo: branch `luiz/melhorias`
 
 | Parte do projeto | Em que consistiu o apoio |
 |---|---|
@@ -294,14 +310,6 @@ projeto.
 Todo o código entregue foi revisado pelos integrantes, que respondem por
 qualquer trecho da implementação.
 
-## Fluxo de trabalho
-
-```text
-develop -> branch-de-trabalho -> develop -> main
-```
-
-**Nunca desenvolver ou commitar diretamente na `main`.**
-
 ## Documentação
 
 | Documento | Conteúdo |
@@ -309,8 +317,9 @@ develop -> branch-de-trabalho -> develop -> main
 | [`docs/comandos.md`](docs/comandos.md) | Comandos PowerShell para executar no PC e gerar/gravar firmware na ESP32. |
 | [`docs/decisoes.md`](docs/decisoes.md) | Semântica da Macaronica e extensões explícitas do projeto. |
 | [`docs/gramatica.md`](docs/gramatica.md) | Gramática operacional. |
-| [`docs/decisoes_backend.md`](docs/decisoes_backend.md) | Tipos LLVM, runtime, portabilidade e execução do PjBL 3. |
+| [`docs/decisoes_backend.md`](docs/decisoes_backend.md) | Lacunas da Seção 4.3, expressões mistas, tipos LLVM, runtime e execução do PjBL 3. |
 | [`docs/otimizacoes.md`](docs/otimizacoes.md) | Evidências de SSA, `mem2reg`, `phi`, `-O2` e equivalência. |
 | [`docs/guia-defesa-pjbl3.md`](docs/guia-defesa-pjbl3.md) | Guia de código, conceitos das aulas e perguntas de arguição. |
 | [`docs/diagnosticos.md`](docs/diagnosticos.md) | Catálogo dos códigos de erro léxico, sintático e semântico. |
 | [`docs/plano-pjbl3-4.md`](docs/plano-pjbl3-4.md) | Situação, pendências e cronograma do PjBL 3 e 4 até 17/11. |
+| [`docs/fluxo-git.md`](docs/fluxo-git.md) | Fluxo de branches do grupo (`develop` e `main`). |

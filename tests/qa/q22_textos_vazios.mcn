@@ -1,0 +1,49 @@
+registro Caixa @ [ palavra rotulo; inteira n; ]
+
+outrafuncao palavra nada() @
+[
+    palavra p;
+    respost p;
+]
+
+outrafuncao palavra literalVazio() @
+[
+    respost "";
+]
+
+outrafuncao bool ehVazia(palavra p) @
+[
+    respost p == "";
+]
+
+inteira principal() @
+[
+    Caixa c;
+    palavra vet{2} ps;
+    palavra x;
+    imprimePalavra("<");
+    imprimePalavra(nada());
+    imprimePalavra(literalVazio());
+    imprimePalavra(c.rotulo);
+    imprimePalavra(ps{1});
+    imprimePalavra(">");
+    imprimeNl();
+    imprimeBool(ehVazia(nada()));
+    imprimeBool(ehVazia(literalVazio()));
+    imprimeBool(ehVazia(c.rotulo));
+    imprimeBool(ehVazia(ps{0}));
+    imprimeBool(ehVazia(" "));
+    imprimeNl();
+    imprimeBool(nada() == literalVazio());
+    imprimeBool(c.rotulo ! ps{0});
+    imprimeNl();
+    x receba "algo";
+    x receba nada();
+    imprimeBool(x == "");
+    imprimeNl();
+    c.rotulo receba "r";
+    c.rotulo receba literalVazio();
+    imprimeBool(c.rotulo == x);
+    imprimeNl();
+    respost 0;
+]

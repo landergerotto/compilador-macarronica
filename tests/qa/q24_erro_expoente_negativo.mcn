@@ -1,0 +1,15 @@
+outrafuncao inteira potencia(inteira b, inteira e) @
+[
+    respost b ^ e;
+]
+
+inteira principal() @
+[
+    imprimeInteira(potencia(2, 10));
+    imprimeNl();
+    imprimeInteira(potencia(-3, 3));
+    imprimeNl();
+    imprimeInteira(potencia(1, -1));
+    imprimeNl();
+    respost 0;
+]

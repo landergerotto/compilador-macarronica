@@ -1,0 +1,55 @@
+inteira principal() @
+[
+    inteira i, j, k, soma, pares, total;
+    repete (i receba 1, i < 4, i receba i + 1) edai
+    [
+        repete (j receba 1, j < 4, j receba j + 1) edai
+        [
+            imprimeInteira(i * j);
+            cond (j < 3) edai [ imprimePalavra(" "); ]
+        ]
+        imprimeNl();
+    ]
+    repete (i receba 1, i < 5, i receba i + 1) edai
+    [
+        repete (j receba 0, j < i, j receba j + 1) edai [ imprimePalavra("*"); ]
+        imprimeNl();
+    ]
+    pares receba 0;
+    repete (i receba 0, i < 10, i receba i + 1) edai
+    [
+        repete (j receba i + 1, j < 10, j receba j + 1) edai
+        [
+            cond ((i + j) // 3 * 3 == i + j) edai [ pares receba pares + 1; ]
+        ]
+    ]
+    imprimeInteira(pares);
+    imprimeNl();
+    soma receba 0;
+    repete (i receba 0, i < 0, i receba i + 1) edai [ soma receba soma + 1000; ]
+    repete (i receba 5, i > 0, i receba i - 2) edai [ soma receba soma + i; ]
+    imprimeInteira(soma);
+    imprimePalavra(" ");
+    imprimeInteira(i);
+    imprimeNl();
+    total receba 0;
+    i receba 0;
+    durante (i < 4) edai
+    [
+        j receba 0;
+        durante (j < 4) edai
+        [
+            k receba 0;
+            durante (k < 4) edai
+            [
+                cond (i ! j E j ! k E i ! k) edai [ total receba total + 1; ]
+                k receba k + 1;
+            ]
+            j receba j + 1;
+        ]
+        i receba i + 1;
+    ]
+    imprimeInteira(total);
+    imprimeNl();
+    respost total;
+]

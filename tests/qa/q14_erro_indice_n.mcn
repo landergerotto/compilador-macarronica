@@ -1,0 +1,24 @@
+inteira vet{3} v;
+
+outrafuncao inteira proximo(inteira x) @
+[
+    respost x + 1;
+]
+
+inteira principal() @
+[
+    inteira i;
+    repete (i receba 0, i < 3, i receba i + 1) edai
+    [
+        v{i} receba i * 7;
+        imprimeInteira(v{i});
+        imprimeNl();
+    ]
+    i receba proximo(2);
+    imprimePalavra("antes");
+    imprimeNl();
+    v{i} receba 1;
+    imprimePalavra("depois");
+    imprimeNl();
+    respost 0;
+]

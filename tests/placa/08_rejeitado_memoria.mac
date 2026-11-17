@@ -1,0 +1,8 @@
+inteira principal() @
+[
+    inteira vet{10000} grande;
+    grande{0} receba 1;
+    imprimeInteira(grande{0});
+    imprimeNl();
+    respost 0;
+]

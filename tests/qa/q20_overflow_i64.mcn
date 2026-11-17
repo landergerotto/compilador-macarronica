@@ -1,0 +1,43 @@
+inteira principal() @
+[
+    inteira maximo, minimo, x, i;
+    maximo receba 9223372036854775807;
+    minimo receba -9223372036854775807 - 1;
+    imprimeInteira(maximo + 1);
+    imprimeNl();
+    imprimeInteira(minimo - 1);
+    imprimeNl();
+    imprimeInteira(maximo * 2);
+    imprimeNl();
+    imprimeInteira(minimo * -1);
+    imprimeNl();
+    imprimeInteira(-minimo);
+    imprimeNl();
+    imprimeInteira(3 ^ 40);
+    imprimeNl();
+    imprimeInteira(3 ^ 70);
+    imprimeNl();
+    imprimeInteira(2 ^ 63);
+    imprimePalavra(" ");
+    imprimeInteira(2 ^ 64);
+    imprimeNl();
+    imprimeInteira(12345678901 * 1000000000);
+    imprimeNl();
+    imprimeInteira(minimo // 10);
+    imprimePalavra(" ");
+    imprimeInteira(minimo - minimo // 10 * 10);
+    imprimeNl();
+    imprimeInteira(maximo // -1);
+    imprimeNl();
+    x receba 1;
+    repete (i receba 0, i < 64, i receba i + 1) edai [ x receba x * 2; ]
+    imprimeInteira(x);
+    imprimeNl();
+    x receba 1;
+    repete (i receba 0, i < 63, i receba i + 1) edai [ x receba x * 2; ]
+    imprimeInteira(x);
+    imprimePalavra(" ");
+    imprimeBool(x < 0);
+    imprimeNl();
+    respost 0;
+]

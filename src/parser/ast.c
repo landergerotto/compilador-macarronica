@@ -42,6 +42,7 @@ AstNode *ast_node_create(AstKind kind, SourceSpan span, size_t node_id)
     node->node_id = node_id;
     node->semantic.symbol_id = AST_ID_NONE;
     node->semantic.type_id = AST_ID_NONE;
+    node->semantic.conversion_type_id = AST_ID_NONE;
     return node;
 }
 
@@ -330,6 +331,7 @@ static void dump_semantic(FILE *stream,
     fputs("semantic", stream);
     dump_optional_id(stream, "symbol", semantic->symbol_id);
     dump_optional_id(stream, "type", semantic->type_id);
+    dump_optional_id(stream, "converte", semantic->conversion_type_id);
     if (semantic->flags != 0U) {
         fprintf(stream, " flags=%u", semantic->flags);
     }

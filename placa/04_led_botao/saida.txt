@@ -1,0 +1,6 @@
+piscada 1: LED azul aceso
+piscada 2: LED azul aceso
+piscada 3: LED azul aceso
+piscada 4: LED azul aceso
+piscada 5: LED azul aceso
+botao BOOT solto (GPIO0 com pull-up): VER

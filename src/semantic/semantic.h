@@ -15,10 +15,6 @@
 
 #include <stdio.h>
 
-#ifndef MACARONICA_SEMANTIC_DEBUG
-#define MACARONICA_SEMANTIC_DEBUG 1
-#endif
-
 /*
  * Flags que a semantica pode juntar no mesmo no: se ele recebe valor, se pode
  * ser lido, se e constante, se ja deu erro ou se representa um vetor inteiro.

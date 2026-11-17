@@ -1,0 +1,23 @@
+inteira principal() @
+[
+    inteira a, b;
+    flut x;
+    a receba 7;
+    b receba 2;
+    imprimeInteira(a // b);
+    imprimeNl();
+    imprimeDuplocarpado(a / b);
+    imprimeNl();
+    imprimeInteira(-7 // 2);
+    imprimeNl();
+    imprimeDuplocarpado(-7 / 2);
+    imprimeNl();
+    x receba 7.0;
+    imprimeFlut(x / b);
+    imprimeNl();
+    imprimeDuplocarpado(1 / 3);
+    imprimeNl();
+    imprimeFlut(1.0 / 3);
+    imprimeNl();
+    respost 0;
+]

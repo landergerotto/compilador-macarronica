@@ -173,14 +173,6 @@ static int emit_token(Lexer *lexer, TokenKind kind, SourcePosition start, TokenL
         lexer->failed = 1;
         return 0;
     }
-#if MACARONICA_LEXER_DEBUG
-    (void)fprintf(stderr, "[debug][lexer] %zu:%zu %-18s `", // debug - remover
-                  start.line, start.column, token_kind_name(kind));
-    if (token.start != NULL && token.length > 0U) {
-        (void)fwrite(token.start, 1U, token.length, stderr); // debug - remover
-    }
-    (void)fputs("`\n", stderr); // debug - remover
-#endif
     return 1;
 }
 
@@ -217,6 +209,14 @@ static TokenKind identifier_kind(const char *start, size_t length)
     return TOKEN_IDENTIFIER;
 }
 
+/* E-LEX-007: a negacao logica e somente 'NÃO' (D-001). 'NAO' sem til e as
+ * grafias 'não', 'Não', 'NãO' etc. quase sempre sao essa negacao escrita
+ * errado. O lexer relata um unico erro com a grafia certa e emite
+ * TOKEN_LOGICAL_NOT mesmo assim, para que o resto da linha seja lido como o
+ * programador quis, sem erros em cascata. */
+static const char MISSPELLED_NOT_MESSAGE[] =
+    "a negacao logica se escreve 'N\xC3\x83O' (maiusculas, com til)";
+
 static void scan_identifier(Lexer *lexer, SourcePosition start)
 {
     TokenLiteral literal = empty_literal();
@@ -227,6 +227,13 @@ static void scan_identifier(Lexer *lexer, SourcePosition start)
     }
     kind = identifier_kind(lexer->source->buffer + start.offset,
                            lexer->current - start.offset);
+    /* 'NAO' maiusculo e o unico identificador ASCII tratado como erro:
+     * 'nao' e 'Nao' continuam nomes validos. */
+    if (kind == TOKEN_IDENTIFIER && lexer->current - start.offset == 3U &&
+        memcmp(lexer->source->buffer + start.offset, "NAO", 3U) == 0) {
+        add_lexical_error(lexer, start, "E-LEX-007", MISSPELLED_NOT_MESSAGE);
+        kind = TOKEN_LOGICAL_NOT;
+    }
     if (kind == TOKEN_TRUE || kind == TOKEN_FALSE) {
         literal.booleano = kind == TOKEN_TRUE;
     }
@@ -243,6 +250,22 @@ static int matches_logical_not(const Lexer *lexer)
     }
     return remaining == sizeof(spelling) ||
            !is_identifier_continue((unsigned char)lexer->source->buffer[lexer->current + sizeof(spelling)]);
+}
+
+/* 'N' ou 'n', depois 'Ã' (C3 83) ou 'ã' (C3 A3), depois 'O' ou 'o', como
+ * palavra inteira e diferente do 'NÃO' certo. Esses bytes nunca formam um
+ * identificador valido (D-003), entao reconhece-los nao recusa programa
+ * algum que antes era aceito. */
+static int matches_misspelled_not(const Lexer *lexer)
+{
+    const unsigned char *bytes = (const unsigned char *)lexer->source->buffer + lexer->current;
+    size_t remaining = lexer->source->length - lexer->current;
+    if (remaining < 4U || (bytes[0] != 'N' && bytes[0] != 'n') || bytes[1] != 0xC3U ||
+        (bytes[2] != 0x83U && bytes[2] != 0xA3U) || (bytes[3] != 'O' && bytes[3] != 'o')) {
+        return 0;
+    }
+    if (remaining > 4U && is_identifier_continue(bytes[4])) return 0;
+    return !matches_logical_not(lexer);
 }
 
 static void scan_number(Lexer *lexer, SourcePosition start)
@@ -440,6 +463,15 @@ static void scan_token(Lexer *lexer)
         (void)emit_token(lexer, TOKEN_LOGICAL_NOT, start, empty_literal());
         return;
     }
+    if (matches_misspelled_not(lexer)) {
+        /* Tres caracteres: N/n, Ã/ã (dois bytes) e O/o. */
+        (void)advance_character(lexer, &valid);
+        (void)advance_character(lexer, &valid);
+        (void)advance_character(lexer, &valid);
+        add_lexical_error(lexer, start, "E-LEX-007", MISSPELLED_NOT_MESSAGE);
+        (void)emit_token(lexer, TOKEN_LOGICAL_NOT, start, empty_literal());
+        return;
+    }
     if (is_ascii_letter(byte)) {
         scan_identifier(lexer, start);
         return;
@@ -506,20 +538,10 @@ FrontendStatus lexer_scan_all(const SourceFile *source,
     lexer.failed = 0;
     errors_before = diagnostics->error_count;
 
-#if MACARONICA_LEXER_DEBUG
-    (void)fprintf(stderr, "[debug][lexer] iniciando `%s` (%zu bytes)\n", // debug - remover
-                  source->path != NULL ? source->path : "<fonte>",
-                  source->length);
-#endif
     while (!at_end(&lexer) && !lexer.failed) {
         scan_token(&lexer);
     }
     (void)emit_token(&lexer, TOKEN_EOF, position(&lexer), literal);
-#if MACARONICA_LEXER_DEBUG
-    (void)fprintf(stderr, "[debug][lexer] fim: %zu tokens, %zu erro(s) novo(s)\n", // debug - remover
-                  out_tokens->count,
-                  diagnostics->error_count - errors_before);
-#endif
     if (lexer.failed) {
         return FRONTEND_STATUS_INTERNAL_ERROR;
     }

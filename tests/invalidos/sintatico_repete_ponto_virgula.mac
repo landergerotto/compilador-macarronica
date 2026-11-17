@@ -1,0 +1,9 @@
+vazio principal() @
+[
+    inteira i;
+    repete (i receba 0; i < 3; i receba i + 1) edai
+    [
+        i receba i;
+    ]
+    respost;
+]

@@ -20,20 +20,6 @@ typedef struct {
     int allocation_failed;
 } SemanticAnalyzer;
 
-#if MACARONICA_SEMANTIC_DEBUG
-static void semantic_debug(const char *format, ...)
-{
-    va_list arguments;
-
-    va_start(arguments, format);
-    (void)fputs("[debug][semantic] ", stderr); // debug - remover
-    (void)vfprintf(stderr, format, arguments); // debug - remover
-    va_end(arguments);
-}
-#define SEMANTIC_DEBUG(...) semantic_debug(__VA_ARGS__)
-#else
-#define SEMANTIC_DEBUG(...) ((void)0)
-#endif
 
 static void annotate(AstNode *node, size_t type_id, size_t symbol_id,
                      unsigned int flags)
@@ -170,7 +156,6 @@ static int collect_record_names(SemanticAnalyzer *analyzer, AstNode *root)
                             analyzer->result->global_scope_id, &symbol_id)) continue;
         type_table_set_declaration_symbol(&analyzer->result->types, type_id, symbol_id);
         annotate(node, type_id, symbol_id, 0U);
-        SEMANTIC_DEBUG("registro coletado: %s\n", node->as.struct_decl.name);
     }
     return !analyzer->allocation_failed;
 }
@@ -288,18 +273,17 @@ static int collect_function_signatures(SemanticAnalyzer *analyzer, AstNode *root
                 analyzer->result->principal_symbol_id == SYMBOL_ID_NONE) {
                 analyzer->result->principal_symbol_id = symbol_id;
             }
-            SEMANTIC_DEBUG("assinatura coletada: %s/%zu\n",
-                           node->as.function_decl.name,
-                           parameter_count);
         } else {
             annotate(node, return_type, SYMBOL_ID_NONE, AST_SEMANTIC_ERROR);
         }
         free(parameter_types);
     }
-    if (principal_count != 1U) {
+    /* So a falta de principal e relatada aqui. Uma segunda principal ja gera
+     * E-SEM-003 (redefinicao) no ponto exato; relatar E-SEM-004 tambem seria
+     * cascata: dois diagnosticos para o mesmo erro. */
+    if (principal_count == 0U) {
         semantic_error(analyzer, program_span, "E-SEM-004",
-                       "programa deve declarar exatamente uma principal; encontrou %zu",
-                       principal_count);
+                       "programa deve declarar exatamente uma principal; nenhuma encontrada");
     }
     return !analyzer->allocation_failed;
 }
@@ -360,9 +344,6 @@ static void declare_value_names(SemanticAnalyzer *analyzer,
             }
             if (node->semantic.symbol_id == SYMBOL_ID_NONE)
                 node->semantic.symbol_id = symbol_id;
-            SEMANTIC_DEBUG("declarado %s '%s' no escopo %zu\n",
-                           symbol_category_name(declared_category), name->name,
-                           analyzer->current_scope_id);
         } else {
             name->symbol_id = SYMBOL_ID_NONE;
             node->semantic.flags |= AST_SEMANTIC_ERROR;
@@ -717,6 +698,9 @@ static size_t analyze_binary(SemanticAnalyzer *analyzer, AstNode *node)
 {
     size_t left = analyze_expression(analyzer, node->as.binary_expr.left, 0);
     size_t right = analyze_expression(analyzer, node->as.binary_expr.right, 0);
+    /* Expressao mista (D-012): a conta e feita no tipo numerico mais largo. */
+    size_t common = type_numeric_common(left, right);
+    size_t operand_type = common;
     size_t result_type = TYPE_ID_ERROR;
     int valid = 0;
     if (left == TYPE_ID_ERROR || right == TYPE_ID_ERROR)
@@ -726,31 +710,40 @@ static size_t analyze_binary(SemanticAnalyzer *analyzer, AstNode *node)
     case AST_OP_SUBTRACT:
     case AST_OP_MULTIPLY:
     case AST_OP_POWER:
-        valid = left == right && type_is_numeric(&analyzer->result->types, left);
-        result_type = left;
+        valid = common != TYPE_ID_ERROR;
+        result_type = common;
         break;
     case AST_OP_DIVIDE:
-        valid = left == right && (left == TYPE_ID_FLOAT || left == TYPE_ID_DOUBLE);
-        result_type = left;
+        /* "/" e sempre divisao real: inteira / inteira e feita em duplocarpado. */
+        valid = common != TYPE_ID_ERROR;
+        if (common == TYPE_ID_INTEGER) operand_type = TYPE_ID_DOUBLE;
+        result_type = operand_type;
         break;
     case AST_OP_INTEGER_DIVIDE:
+        /* "//" so existe para inteira; com real o programa usa "/". */
         valid = left == TYPE_ID_INTEGER && right == TYPE_ID_INTEGER;
         result_type = TYPE_ID_INTEGER;
         break;
     case AST_OP_LESS:
     case AST_OP_GREATER:
-        valid = left == right && type_is_numeric(&analyzer->result->types, left);
+        valid = common != TYPE_ID_ERROR;
         result_type = TYPE_ID_BOOL;
         break;
     case AST_OP_EQUAL:
     case AST_OP_DIFFERENT:
-        valid = left == right && type_is_scalar(&analyzer->result->types, left);
+        if (common == TYPE_ID_ERROR) {
+            valid = left == right && type_is_scalar(&analyzer->result->types, left);
+            operand_type = left;
+        } else {
+            valid = 1;
+        }
         result_type = TYPE_ID_BOOL;
         break;
     case AST_OP_LOGICAL_AND:
     case AST_OP_LOGICAL_XOR:
     case AST_OP_LOGICAL_OR:
         valid = left == TYPE_ID_BOOL && right == TYPE_ID_BOOL;
+        operand_type = TYPE_ID_BOOL;
         result_type = TYPE_ID_BOOL;
         break;
     default:
@@ -764,6 +757,8 @@ static size_t analyze_binary(SemanticAnalyzer *analyzer, AstNode *node)
                (node->as.binary_expr.right->semantic.flags & AST_SEMANTIC_CONSTANT) != 0U)
                   ? AST_SEMANTIC_CONSTANT
                   : 0U));
+    if (left != operand_type || right != operand_type)
+        node->semantic.conversion_type_id = operand_type;
     return result_type;
 }
 
@@ -786,7 +781,9 @@ static size_t analyze_unary(SemanticAnalyzer *analyzer, AstNode *node)
         valid = type_is_numeric(&analyzer->result->types, operand);
         break;
     case AST_OP_ROOT:
-        valid = operand == TYPE_ID_FLOAT || operand == TYPE_ID_DOUBLE;
+        /* raiz de inteira e calculada em duplocarpado, como inteira / inteira. */
+        valid = type_is_numeric(&analyzer->result->types, operand);
+        if (operand == TYPE_ID_INTEGER) result_type = TYPE_ID_DOUBLE;
         break;
     case AST_OP_LOGICAL_NOT:
         valid = operand == TYPE_ID_BOOL;
@@ -808,6 +805,8 @@ static size_t analyze_unary(SemanticAnalyzer *analyzer, AstNode *node)
              ((node->as.unary_expr.operand->semantic.flags & AST_SEMANTIC_CONSTANT) != 0U
                   ? AST_SEMANTIC_CONSTANT
                   : 0U));
+    if (node->as.unary_expr.operator_kind == AST_OP_ROOT && result_type != operand)
+        node->semantic.conversion_type_id = result_type;
     return result_type;
 }
 
@@ -887,16 +886,59 @@ static size_t analyze_expression(SemanticAnalyzer *analyzer, AstNode *node,
     }
 }
 
+/* Simbolo do vetor nomeado por um identificador simples (sem indice), ou
+ * SYMBOL_ID_NONE se o no nao for isso. */
+static size_t whole_vector_symbol(SemanticAnalyzer *analyzer, const AstNode *node)
+{
+    size_t symbol_id;
+    const Symbol *symbol;
+    const Type *type;
+    if (node == NULL || node->kind != AST_IDENTIFIER_EXPR) return SYMBOL_ID_NONE;
+    symbol_id = symbol_table_lookup(&analyzer->result->symbols, analyzer->current_scope_id,
+                                    SYMBOL_NAMESPACE_VALUE, node->as.identifier_expr.name);
+    if (symbol_id == SYMBOL_ID_NONE) return SYMBOL_ID_NONE;
+    symbol = symbol_table_get(&analyzer->result->symbols, symbol_id);
+    if (symbol == NULL) return SYMBOL_ID_NONE;
+    type = type_table_get(&analyzer->result->types, symbol->type_id);
+    return type != NULL && type->kind == TYPE_ARRAY ? symbol_id : SYMBOL_ID_NONE;
+}
+
 static void analyze_assignment(SemanticAnalyzer *analyzer, AstNode *node)
 {
     DslContext context = dsl_context(analyzer); /* Frente dsl-mlir */
-    size_t target, value;
+    AstNode *target_node = node->as.assignment.target;
+    AstNode *value_node = node->as.assignment.value;
+    size_t target_vector;
+    size_t target;
+    size_t value;
+    /* A DSL vetorial trata `c receba a + b` (e `-`, `*`) com vetores inteiros;
+     * qualquer outra atribuicao de vetor inteiro continua recusada (E-SEM-026). */
     if (dsl_claims_assignment(&context, node)) {
         dsl_analyze_assignment(&context, node);
         return;
     }
-    target = analyze_expression(analyzer, node->as.assignment.target, 0);
-    value = analyze_expression(analyzer, node->as.assignment.value, 0);
+    target_vector = whole_vector_symbol(analyzer, target_node);
+    if (target_vector != SYMBOL_ID_NONE) {
+        /* Vetor inteiro como alvo (`destino receba origem`): a linguagem nao
+         * copia vetores (D-006), entao ha um erro so, no alvo. Se o valor
+         * tambem e um vetor inteiro, e o mesmo erro e nao e relatado de novo;
+         * qualquer outro valor e analisado normalmente. */
+        semantic_error(analyzer, target_node->span, "E-SEM-026",
+                       "vetor '%s' nao pode ser atribuido de uma vez; atribua elemento por elemento",
+                       target_node->as.identifier_expr.name);
+        annotate(target_node, TYPE_ID_ERROR, target_vector,
+                 AST_SEMANTIC_ARRAY | AST_SEMANTIC_ERROR);
+        value = whole_vector_symbol(analyzer, value_node);
+        if (value != SYMBOL_ID_NONE) {
+            annotate(value_node, TYPE_ID_ERROR, value, AST_SEMANTIC_ARRAY | AST_SEMANTIC_ERROR);
+        } else {
+            (void)analyze_expression(analyzer, value_node, 0);
+        }
+        annotate(node, TYPE_ID_ERROR, SYMBOL_ID_NONE, AST_SEMANTIC_ERROR);
+        return;
+    }
+    target = analyze_expression(analyzer, target_node, 0);
+    value = analyze_expression(analyzer, value_node, 0);
     if ((node->as.assignment.target->semantic.flags & AST_SEMANTIC_LVALUE) == 0U &&
         target != TYPE_ID_ERROR) {
         semantic_error(analyzer, node->as.assignment.target->span, "E-SEM-019",
@@ -1263,7 +1305,6 @@ static void analyze_function(SemanticAnalyzer *analyzer, AstNode *node)
                                  analyzer->current_return_type_id));
         node->semantic.flags |= AST_SEMANTIC_ERROR;
     }
-    SEMANTIC_DEBUG("corpo analisado: %s\n", node->as.function_decl.name);
 
     analyzer->current_scope_id = old_scope;
     analyzer->current_function_id = old_function;
@@ -1323,9 +1364,6 @@ FrontendStatus semantic_analyze(const SourceFile *source,
     analyzer.current_return_type_id = TYPE_ID_ERROR;
     errors_before = diagnostics->error_count;
 
-    SEMANTIC_DEBUG("iniciando `%s` com %zu declaracoes\n",
-                   source->path != NULL ? source->path : "<fonte>",
-                   root->as.program.declarations.count);
     if (!declare_builtins(&analyzer) ||
         !dsl_declare_builtins(result) || /* Frente dsl-mlir: somavet, maxvet, prodesc */
         !collect_record_names(&analyzer, root) ||
@@ -1376,10 +1414,6 @@ FrontendStatus semantic_analyze(const SourceFile *source,
              diagnostics->error_count == errors_before
                  ? 0U : AST_SEMANTIC_ERROR);
     result->analyzed = !analyzer.allocation_failed;
-    SEMANTIC_DEBUG("fim: %zu simbolos, %zu escopos, %zu erro(s) novo(s)\n",
-                   result->symbols.count,
-                   result->symbols.scope_count,
-                   diagnostics->error_count - errors_before);
     if (analyzer.allocation_failed) {
         return FRONTEND_STATUS_INTERNAL_ERROR;
     }
