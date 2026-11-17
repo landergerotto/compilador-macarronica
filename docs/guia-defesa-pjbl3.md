@@ -192,11 +192,12 @@ placa. A escolha da placa continua no PjBL 4.
 
 ```sh
 make test
-./build/debug/macaronica examples/ssa.mac -o build/ssa.ll
-llvm-as build/ssa.ll -o build/ssa.bc
-opt -passes=verify build/ssa.ll -disable-output
-opt -S -passes=mem2reg build/ssa.ll -o build/ssa_mem2reg.ll
-opt -S -O2 build/ssa.ll -o build/ssa_O2.ll
+mkdir -p build/ssa
+./build/debug/macaronica examples/ssa.mac -o build/ssa/ssa.ll
+llvm-as build/ssa/ssa.ll -o build/ssa/ssa.bc
+opt -passes=verify build/ssa/ssa.ll -disable-output
+opt -S -passes=mem2reg build/ssa/ssa.ll -o build/ssa/ssa_mem2reg.ll
+opt -S -O2 build/ssa/ssa.ll -o build/ssa/ssa_O2.ll
 ```
 
 No Windows, use `mingw32-make` e o executável `macaronica.exe`.

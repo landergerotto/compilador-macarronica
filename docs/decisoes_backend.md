@@ -181,10 +181,11 @@ funções matemáticas e de E/S do CRT. O teste Windows carrega o mesmo runtime
 compilado como DLL nativa e chama diretamente a entrada do módulo:
 
 ```sh
+mkdir -p build/experiments
 clang -std=c99 -shared -DZL_RUNTIME_NO_MAIN runtime/zl_runtime_posix.c \
-  -lm -Wl,--export-all-symbols -o build/zl_runtime_posix.dll
+  -lm -Wl,--export-all-symbols -o build/experiments/zl_runtime_posix.dll
 lli --entry-function=zl_principal \
-  --dlopen=C:/caminho/absoluto/build/zl_runtime_posix.dll programa.ll
+  --dlopen=C:/caminho/absoluto/build/experiments/zl_runtime_posix.dll programa.ll
 ```
 
 `ZL_RUNTIME_NO_MAIN` omite somente o `main` do runtime compartilhado;
