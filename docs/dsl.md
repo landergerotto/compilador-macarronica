@@ -6,7 +6,9 @@ nomes e assinaturas dos núcleos MLIR que a frente de benchmark usa.
 
 Código: `src/semantic/dsl.c` (semântica e nomes dos núcleos),
 `src/codegen_mlir.c` (núcleos em MLIR, declarações e chamadas LLVM, laços C),
-`scripts/pipeline.sh` (descida MLIR → LLVM) e `tests/dsl/`.
+`scripts/dsl/teste.sh` (`make dsl-teste`: recusas, descida MLIR → LLVM e
+execução ligada) e `tests/dsl/16_dsl_vetorial.mac`, com as recusas em
+`tests/semantic/invalido_dsl_*.mac`.
 
 ## 1. Operações
 
@@ -247,13 +249,24 @@ static int64_t mcn_somavet_i64(const int64_t *a, int64_t n);
   `arith.select`, que é o `se (x > m)` do laço escalar.
 
 Para ver o MLIR de um programa, compile-o com `-o prog.ll`. Se ele usa a DSL,
-o compilador grava `prog.mlir` ao lado. Para descer esse arquivo:
+o compilador grava `prog.mlir` ao lado. O `.ll` chama os núcleos `mcn_*`, que
+só existem no `.mlir`. Para rodar, desça o `.mlir` e ligue os dois, como faz o
+`make dsl-teste` (`scripts/dsl/teste.sh`):
 
 ```bash
-scripts/pipeline.sh prog.mac
+B=/usr/lib/llvm-18/bin
+build/release/macaronica prog.mac -o prog.ll   # grava prog.ll e prog.mlir
+$B/mlir-opt prog.mlir --lower-affine --convert-scf-to-cf \
+    --convert-arith-to-llvm --finalize-memref-to-llvm --convert-func-to-llvm \
+    --convert-cf-to-llvm --reconcile-unrealized-casts -o prog_llvm.mlir
+$B/mlir-translate --mlir-to-llvmir prog_llvm.mlir -o prog_nucleos.ll
+$B/clang -Wno-override-module prog.ll prog_nucleos.ll \
+    runtime/zl_runtime_posix.c -lm -o prog
+./prog
 ```
 
-O script mostra cada passo comentado (Seção 7 do relatório).
+A rota C99 (`--emit-c` e a placa, com `--alvo=esp32`) não usa o MLIR: nela a
+DSL sai como laços inline no C.
 
 ## 7. Informação que a semântica deixa para os back-ends
 

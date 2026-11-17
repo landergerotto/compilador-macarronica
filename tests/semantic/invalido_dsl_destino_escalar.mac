@@ -1,0 +1,8 @@
+inteira principal() @
+[
+    inteira x;
+    inteira vet{4} a;
+    inteira vet{4} b;
+    x receba a + b;
+    respost x;
+]
