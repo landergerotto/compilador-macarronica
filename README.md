@@ -81,6 +81,10 @@ Os executáveis ficam em `build/debug/`, `build/release/` ou
 `build/sanitize/`, conforme o alvo. No Windows, o nome recebe a extensão
 `.exe`.
 
+Use `build/experiments/` para saídas de comandos manuais e verificações
+temporárias. Todo o conteúdo de `build/` pode ser removido por `make clean`;
+guarde fora dele qualquer arquivo que precise preservar.
+
 O build de debug escreve mensagens iniciadas por `[debug]` em `stderr`. O build
 de release desativa essas mensagens. Para recompilar tudo, use `make -B debug`
 ou `mingw32-make -B debug`.
@@ -157,14 +161,15 @@ causam falha no teste completo; use `test-frontend` para testar só o front-end.
 ## Gerar e executar LLVM IR
 
 ```sh
-./build/debug/macaronica tests/execucao/05_lacos.mac -o build/programa.ll
-llvm-as build/programa.ll -o build/programa.bc
-opt -passes=verify build/programa.ll -disable-output
-clang -std=c99 -O0 -emit-llvm -c runtime/zl_runtime_posix.c -o build/runtime.bc
-llvm-link build/programa.bc build/runtime.bc -o build/programa_ligado.bc
-lli build/programa_ligado.bc
-clang build/programa.ll runtime/zl_runtime_posix.c -lm -o build/programa
-./build/programa
+mkdir -p build/experiments
+./build/debug/macaronica tests/execucao/05_lacos.mac -o build/experiments/programa.ll
+llvm-as build/experiments/programa.ll -o build/experiments/programa.bc
+opt -passes=verify build/experiments/programa.ll -disable-output
+clang -std=c99 -O0 -emit-llvm -c runtime/zl_runtime_posix.c -o build/experiments/runtime.bc
+llvm-link build/experiments/programa.bc build/experiments/runtime.bc -o build/experiments/programa_ligado.bc
+lli build/experiments/programa_ligado.bc
+clang build/experiments/programa.ll runtime/zl_runtime_posix.c -lm -o build/experiments/programa
+./build/experiments/programa
 ```
 
 No Windows, acrescente `.exe` aos executáveis gerados. O LLVM/Clang do
@@ -216,8 +221,8 @@ Os detalhes de avaliação, inicialização, limites e erros estão em
 ## Otimizações e defesa
 
 ```sh
-opt -S -passes=mem2reg build/programa.ll -o build/programa_mem2reg.ll
-opt -S -O2 build/programa.ll -o build/programa_O2.ll
+opt -S -passes=mem2reg build/experiments/programa.ll -o build/experiments/programa_mem2reg.ll
+opt -S -O2 build/experiments/programa.ll -o build/experiments/programa_O2.ll
 ```
 
 A IR inicial usa `alloca` no bloco `entry`, `load` e `store`. `mem2reg`
@@ -264,17 +269,6 @@ eventos alternados a aproximadamente 1 s. A luz do LED requer confirmação
 visual. O runtime ESP32 desta etapa atende GPIO/espera e texto/nova linha;
 serviços numéricos e de entrada ainda dependem do runtime POSIX.
 Versões, evidências e limitações estão em [docs/placa.md](docs/placa.md).
-
-## Uso de IA
-
-O desenvolvimento usa Codex para diagnóstico, implementação, revisão,
-documentação e execução de testes, com responsabilidades de arquitetura,
-linguagem, IR, runtime, testes, otimização e revisão pedagógica. Propostas de
-IA exigem revisão do grupo e validação pelas ferramentas. O grupo deve saber
-explicar a AST anotada, os tipos, os blocos/terminadores, as guardas de runtime,
-as conversões e o efeito de `mem2reg`/`phi`. Resultados de testes relatados
-referem-se apenas às ferramentas efetivamente executadas, não a uma prova
-formal de correção.
 
 ## Fluxo de trabalho
 

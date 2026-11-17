@@ -20,29 +20,31 @@ mingw32-make release
 ```powershell
 # Exemplo pronto: imprime 22. Troque pelo caminho do seu programa.
 $fonte = '.\tests\execucao\05_lacos.mac'
+New-Item -ItemType Directory -Force .\build\experiments | Out-Null
 
 # Macaronica -> LLVM IR textual.
-.\build\release\macaronica.exe $fonte -o .\build\programa.ll
+.\build\release\macaronica.exe $fonte -o .\build\experiments\programa.ll
 
 # Validar o LLVM IR.
-llvm-as .\build\programa.ll -o .\build\programa.bc
-opt -passes=verify .\build\programa.ll -disable-output
+llvm-as .\build\experiments\programa.ll -o .\build\experiments\programa.bc
+opt -passes=verify .\build\experiments\programa.ll -disable-output
 
 # LLVM IR + runtime do PC -> executável Windows.
-clang .\build\programa.ll .\runtime\zl_runtime_posix.c -lm -o .\build\programa.exe
+clang .\build\experiments\programa.ll .\runtime\zl_runtime_posix.c -lm -o .\build\experiments\programa.exe
 
 # Executar no computador.
-.\build\programa.exe
+.\build\experiments\programa.exe
 ```
 
 ### Alternativa: gerar C99 e executar no computador
 
 ```powershell
 $fonte = '.\tests\execucao\05_lacos.mac'
+New-Item -ItemType Directory -Force .\build\experiments | Out-Null
 
-.\build\release\macaronica.exe --emit-c $fonte -o .\build\programa.c
-gcc -std=c99 -Wall -Wextra -pedantic -I .\runtime .\build\programa.c .\runtime\zl_runtime_posix.c -lm -o .\build\programa_c.exe
-.\build\programa_c.exe
+.\build\release\macaronica.exe --emit-c $fonte -o .\build\experiments\programa.c
+gcc -std=c99 -Wall -Wextra -pedantic -I .\runtime .\build\experiments\programa.c .\runtime\zl_runtime_posix.c -lm -o .\build\experiments\programa_c.exe
+.\build\experiments\programa_c.exe
 ```
 
 ## 2. Compilar e mandar para a ESP32
