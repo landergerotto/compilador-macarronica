@@ -225,7 +225,7 @@ capturar() {
 # compilador precisa recusar o programa para a placa com aquele codigo.
 testar_um() {
     local prog="$1" porta="$2" pilha="$3" compilador="$4"
-    local nome base dir codigo entrada bruto texto final status linha_erro esperado_erro
+    local nome base dir codigo entrada bruto texto final status linha_erro esperado_erro tentativa
     nome="$(nome_do_programa "$prog")"
     base="${prog%.*}"
     dir="build/placa/$nome"
@@ -249,9 +249,28 @@ testar_um() {
         printf 'FALHA %s: nao compilou (%s/compilar.log)\n' "$prog" "$dir"
         return 1
     fi
-    if ! (gravar "$prog" "$porta") >"$dir/gravar.log" 2>&1; then
-        printf 'FALHA %s: nao gravou em %s (%s/gravar.log)\n' "$prog" "$porta" "$dir"
-        return 1
+    # A DevKit V1 as vezes nao entra sozinha em modo de gravacao ("Wrong boot
+    # mode ... download mode"): no Windows o DTR e o RTS mudam em duas chamadas
+    # e o EN pode subir antes de o IO0 descer. Tenta de novo e pede o botao
+    # BOOT (IO0); com BOOT=1 pede o botao ja na primeira tentativa.
+    tentativa=1
+    if [ -n "${BOOT:-}" ]; then
+        printf 'placa: SEGURE o botao BOOT para gravar %s\n' "$prog"
+        sleep 3
+    fi
+    until (gravar "$prog" "$porta") >"$dir/gravar.log" 2>&1; do
+        if [ "$tentativa" -ge "${TENTATIVAS:-4}" ] || ! grep -q 'download mode' "$dir/gravar.log"; then
+            printf 'FALHA %s: nao gravou em %s (%s/gravar.log)\n' "$prog" "$porta" "$dir"
+            return 1
+        fi
+        tentativa=$((tentativa + 1))
+        printf 'placa: %s nao entrou em modo de gravacao; tentativa %s de %s: SEGURE o botao BOOT\n' \
+            "$porta" "$tentativa" "${TENTATIVAS:-4}"
+        sleep 2
+    done
+    if [ -n "${BOOT:-}" ] || [ "$tentativa" -gt 1 ]; then
+        printf 'placa: gravado na tentativa %s: SOLTE o botao BOOT\n' "$tentativa"
+        sleep 5
     fi
     entrada=
     [ ! -f "$base.in" ] || entrada="$base.in"

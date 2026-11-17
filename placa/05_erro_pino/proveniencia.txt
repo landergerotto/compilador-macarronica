@@ -1,0 +1,10 @@
+programa: tests/placa/05_erro_pino.mac
+compilador: build/release/macaronica.exe (commit 61cd328, com alteracoes locais)
+geracao: macaronica --alvo=esp32 --ram-limite=65536 tests/placa/05_erro_pino.mac -o programa.c
+placa: esp32:esp32:esp32doit-devkit-v1, nucleo esp32:esp32 3.3.11
+arduino-cli: arduino-cli  Version: 1.4.1 Commit: e39419312 Date: 2026-01-19T16:12:56Z
+pilha da tarefa macaronica: 65536 bytes (zl_config.h); opcoes extras: -ffp-contract=off
+Sketch uses 273836 bytes (20%) of program storage space. Maximum is 1310720 bytes.
+Global variables use 22156 bytes (6%) of dynamic memory, leaving 305524 bytes for local variables. Maximum is 327680 bytes.
+sha256 05_erro_pino.bin: 7d569f1c1f91d90b86bc9f1fea37692093accb4a214e22f4cd4059d815132804
+data: 2026-11-17 16:05:33

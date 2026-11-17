@@ -10,3 +10,7 @@
 *.gcda
 *.gcno
 *.gcov
+
+# Firmware da placa: o .elf (5,7 MB cada) e as copias *_flashed.bin ficam fora do git
+placa/**/*.elf
+placa/**/*_flashed.bin

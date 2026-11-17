@@ -271,18 +271,19 @@ Versões, evidências e limitações estão em [docs/placa.md](docs/placa.md).
 Declaração padrão do Plano de Ensino (seção 6.1, Resolução nº 274/2024 CONSUN):
 
 > Durante a preparação deste compilador (código, testes e documentação dos
-> PjBL 1 a 4), os autores usaram Codex (OpenAI, versão [VERSÃO DO CODEX]) e
-> Claude Code (Anthropic, modelo Claude Opus 5.5) para diagnosticar defeitos,
-> implementar e revisar partes do código, escrever testes e documentação e
-> executar as baterias de teste. Após usar essas ferramentas, os autores
-> revisaram e editaram o conteúdo conforme necessário e assumem total
-> responsabilidade pelo conteúdo.
+> PjBL 1 a 4), os autores usaram Codex (OpenAI, versão [VERSÃO DO CODEX]),
+> nas contribuições de Lander Furusho Gerotto, e Claude Code (Anthropic,
+> modelo Claude Opus 5.5), nas contribuições de Luiz Toledo, para
+> diagnosticar defeitos, implementar e revisar partes do código, escrever
+> testes e documentação e executar as baterias de teste. Após usar essas
+> ferramentas, os autores revisaram e editaram o conteúdo conforme necessário
+> e assumem total responsabilidade pelo conteúdo.
 
 Toda proposta das ferramentas passou pela revisão do grupo e pelas baterias de
 teste antes de entrar no projeto. Os resultados de teste citados valem para as
 ferramentas que de fato foram executadas e não são prova formal de correção.
 
-### Apoio de IA nas contribuições da branch `luiz/placa` (PjBL 3 e 4)
+### Apoio do Claude Code nas contribuições de Luiz Toledo: branch `luiz/placa` (PjBL 3 e 4)
 
 | Parte do projeto | Em que consistiu o apoio |
 |---|---|
@@ -292,7 +293,7 @@ ferramentas que de fato foram executadas e não são prova formal de correção.
 | [`src/compiler.c`](src/compiler.c) | Saída escrita num arquivo temporário ao lado do destino, que só substitui o arquivo final se a geração terminar |
 | [`scripts/qa/`](scripts/qa), [`tests/qa/`](tests/qa), [`tests/execucao/`](tests/execucao) | Teste diferencial entre rotas, testes de mutação e os programas da Seção 6.1 |
 
-### Apoio de IA nas contribuições da branch `luiz/melhorias`
+### Apoio do Claude Code nas contribuições de Luiz Toledo: branch `luiz/melhorias`
 
 | Parte do projeto | Em que consistiu o apoio |
 |---|---|
